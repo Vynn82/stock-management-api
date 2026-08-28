@@ -1,0 +1,161 @@
+npx typeorm-ts-node-commonjs migration:create src/database/migrations/CreateUsers
+
+
+
+run migration
+npx typeorm-ts-node-commonjs -d src/database/data-source.ts migration:run
+
+
+npm i
+npm install class-validator class-transformer
+npm install bcrypt
+npm install -D @types/bcrypt
+
+
+
+SUPER_ADMIN
+    → ALL
+
+ADMIN
+    → USER_*
+    → ROLE_*
+    → PRODUCT_*
+    → STOCK_*
+    → ORDER_*
+
+MANAGER
+    → PRODUCT_VIEW
+    → STOCK_VIEW
+    → STOCK_ADJUST
+    → ORDER_VIEW
+    → ORDER_APPROVE
+
+HR
+    → USER_CREATE
+    → USER_VIEW
+    → USER_UPDATE
+
+ACCOUNT
+    → ORDER_VIEW
+    → PAYMENT_VIEW
+    → PAYMENT_CREATE
+
+STAFF
+    → PRODUCT_VIEW
+    → STOCK_VIEW
+    → ORDER_CREATE
+    → ORDER_VIEW
+const permissions = [
+  {
+    name: 'USER_CREATE',
+    resource: 'users',
+    action: 'create',
+    description: 'Create users',
+  },
+  {
+    name: 'USER_VIEW',
+    resource: 'users',
+    action: 'view',
+    description: 'View users',
+  },
+  {
+    name: 'USER_UPDATE',
+    resource: 'users',
+    action: 'update',
+    description: 'Update users',
+  },
+  {
+    name: 'USER_DELETE',
+    resource: 'users',
+    action: 'delete',
+    description: 'Delete users',
+  },
+
+  {
+    name: 'ROLE_CREATE',
+    resource: 'roles',
+    action: 'create',
+    description: 'Create roles',
+  },
+  {
+    name: 'ROLE_VIEW',
+    resource: 'roles',
+    action: 'view',
+    description: 'View roles',
+  },
+  {
+    name: 'ROLE_UPDATE',
+    resource: 'roles',
+    action: 'update',
+    description: 'Update roles',
+  },
+  {
+    name: 'ROLE_DELETE',
+    resource: 'roles',
+    action: 'delete',
+    description: 'Delete roles',
+  },
+
+  {
+    name: 'PRODUCT_CREATE',
+    resource: 'products',
+    action: 'create',
+    description: 'Create products',
+  },
+  {
+    name: 'PRODUCT_VIEW',
+    resource: 'products',
+    action: 'view',
+    description: 'View products',
+  },
+  {
+    name: 'PRODUCT_UPDATE',
+    resource: 'products',
+    action: 'update',
+    description: 'Update products',
+  },
+  {
+    name: 'PRODUCT_DELETE',
+    resource: 'products',
+    action: 'delete',
+    description: 'Delete products',
+  },
+
+  {
+    name: 'STOCK_VIEW',
+    resource: 'stock',
+    action: 'view',
+    description: 'View stock',
+  },
+  {
+    name: 'STOCK_ADJUST',
+    resource: 'stock',
+    action: 'adjust',
+    description: 'Adjust stock',
+  },
+
+  {
+    name: 'ORDER_CREATE',
+    resource: 'orders',
+    action: 'create',
+    description: 'Create orders',
+  },
+  {
+    name: 'ORDER_VIEW',
+    resource: 'orders',
+    action: 'view',
+    description: 'View orders',
+  },
+  {
+    name: 'ORDER_UPDATE',
+    resource: 'orders',
+    action: 'update',
+    description: 'Update orders',
+  },
+  {
+    name: 'ORDER_APPROVE',
+    resource: 'orders',
+    action: 'approve',
+    description: 'Approve orders',
+  },
+];
