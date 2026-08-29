@@ -68,16 +68,17 @@ export class UsersService {
 
     const number = Number(result[0].number);
 
-    // 3. Generate staff ID
+    //  Generate staff ID
     const staffId = `KH${number.toString().padStart(5, '0')}`;
 
-    // 4. Generate temporary password
+    // Generate temporary password
     const temporaryPassword = this.generateTemporaryPassword();
 
-    // 5. Hash password
+    // Hash password
     const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+    // avatar
 
-    // 6. Save User + Profile
+    //  Save User + Profile
     await this.dataSource.transaction(async (manager) => {
       const user = manager.create(User, {
         staffId,
@@ -85,11 +86,14 @@ export class UsersService {
       });
 
       const savedUser = await manager.save(User, user);
+      // generate avatar
+      const avatarUrl = this.generateAvatar(firstName, lastName);
 
       const profile = manager.create(UserProfile, {
         userId: savedUser.id,
         firstName,
         lastName,
+        avatar: avatarUrl,
         email,
         phone: phone ?? null,
         telegramChatId: telegramChatId ?? null,
@@ -101,6 +105,7 @@ export class UsersService {
     await this.mailService.sendWelcomeEmail(
       email,
       firstName,
+      lastName,
       staffId,
       temporaryPassword,
     );
@@ -109,25 +114,6 @@ export class UsersService {
       staffId,
       temporaryPassword,
     };
-  }
-
-  private generateTemporaryPassword(): string {
-    return `${this.randomString(4)}${this.randomString(4)}!`;
-  }
-
-  private randomString(length: number): string {
-    const characters =
-      'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
-
-    let result = '';
-
-    for (let i = 0; i < length; i++) {
-      result += characters.charAt(
-        Math.floor(Math.random() * characters.length),
-      );
-    }
-
-    return result;
   }
 
   async getRoles(userId: string) {
@@ -193,5 +179,30 @@ export class UsersService {
     });
 
     return this.getRoles(userId);
+  }
+  /// helper method
+  private generateTemporaryPassword(): string {
+    return `${this.randomString(4)}${this.randomString(4)}!`;
+  }
+
+  private randomString(length: number): string {
+    const characters =
+      'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+
+    let result = '';
+
+    for (let i = 0; i < length; i++) {
+      result += characters.charAt(
+        Math.floor(Math.random() * characters.length),
+      );
+    }
+
+    return result;
+  }
+  private generateAvatar(firstName: string, lastName: string): string {
+    const initials =
+      `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+
+    return `https://ui-avatars.com/api/?name=${initials}&background=random`;
   }
 }

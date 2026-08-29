@@ -25,25 +25,21 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
         name: 'USER_CREATE',
         resource: 'users',
         action: 'create',
-        description: 'Create users',
       },
       {
         name: 'USER_VIEW',
         resource: 'users',
         action: 'view',
-        description: 'View users',
       },
       {
         name: 'USER_UPDATE',
         resource: 'users',
         action: 'update',
-        description: 'Update users',
       },
       {
         name: 'USER_DELETE',
         resource: 'users',
         action: 'delete',
-        description: 'Delete users',
       },
 
       // Roles
@@ -51,25 +47,21 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
         name: 'ROLE_CREATE',
         resource: 'roles',
         action: 'create',
-        description: 'Create roles',
       },
       {
         name: 'ROLE_VIEW',
         resource: 'roles',
         action: 'view',
-        description: 'View roles',
       },
       {
         name: 'ROLE_UPDATE',
         resource: 'roles',
         action: 'update',
-        description: 'Update roles',
       },
       {
         name: 'ROLE_DELETE',
         resource: 'roles',
         action: 'delete',
-        description: 'Delete roles',
       },
 
       // Products
@@ -77,25 +69,21 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
         name: 'PRODUCT_CREATE',
         resource: 'products',
         action: 'create',
-        description: 'Create products',
       },
       {
         name: 'PRODUCT_VIEW',
         resource: 'products',
         action: 'view',
-        description: 'View products',
       },
       {
         name: 'PRODUCT_UPDATE',
         resource: 'products',
         action: 'update',
-        description: 'Update products',
       },
       {
         name: 'PRODUCT_DELETE',
         resource: 'products',
         action: 'delete',
-        description: 'Delete products',
       },
 
       // Stock
@@ -103,19 +91,16 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
         name: 'STOCK_VIEW',
         resource: 'stock',
         action: 'view',
-        description: 'View stock',
       },
       {
         name: 'STOCK_ADJUST',
         resource: 'stock',
         action: 'adjust',
-        description: 'Adjust stock',
       },
       {
         name: 'STOCK_TRANSFER',
         resource: 'stock',
         action: 'transfer',
-        description: 'Transfer stock',
       },
 
       // Orders
@@ -123,31 +108,26 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
         name: 'ORDER_CREATE',
         resource: 'orders',
         action: 'create',
-        description: 'Create orders',
       },
       {
         name: 'ORDER_VIEW',
         resource: 'orders',
         action: 'view',
-        description: 'View orders',
       },
       {
         name: 'ORDER_UPDATE',
         resource: 'orders',
         action: 'update',
-        description: 'Update orders',
       },
       {
         name: 'ORDER_CANCEL',
         resource: 'orders',
         action: 'cancel',
-        description: 'Cancel orders',
       },
       {
         name: 'ORDER_APPROVE',
         resource: 'orders',
         action: 'approve',
-        description: 'Approve orders',
       },
 
       // Import
@@ -155,25 +135,21 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
         name: 'IMPORT_CREATE',
         resource: 'imports',
         action: 'create',
-        description: 'Create imports',
       },
       {
         name: 'IMPORT_VIEW',
         resource: 'imports',
         action: 'view',
-        description: 'View imports',
       },
       {
         name: 'IMPORT_APPROVE',
         resource: 'imports',
         action: 'approve',
-        description: 'Approve imports',
       },
       {
         name: 'IMPORT_REJECT',
         resource: 'imports',
         action: 'reject',
-        description: 'Reject imports',
       },
 
       // Files
@@ -181,19 +157,16 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
         name: 'FILE_VIEW',
         resource: 'files',
         action: 'view',
-        description: 'View files',
       },
       {
         name: 'FILE_DOWNLOAD',
         resource: 'files',
         action: 'download',
-        description: 'Download files',
       },
       {
         name: 'FILE_DELETE',
         resource: 'files',
         action: 'delete',
-        description: 'Delete files',
       },
 
       // Reports
@@ -201,13 +174,11 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
         name: 'REPORT_VIEW',
         resource: 'reports',
         action: 'view',
-        description: 'View reports',
       },
       {
         name: 'REPORT_EXPORT',
         resource: 'reports',
         action: 'export',
-        description: 'Export reports',
       },
 
       // Payments
@@ -215,25 +186,21 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
         name: 'PAYMENT_VIEW',
         resource: 'payments',
         action: 'view',
-        description: 'View payments',
       },
       {
         name: 'PAYMENT_CREATE',
         resource: 'payments',
         action: 'create',
-        description: 'Create payments',
       },
       {
         name: 'PAYMENT_UPDATE',
         resource: 'payments',
         action: 'update',
-        description: 'Update payments',
       },
       {
         name: 'PAYMENT_APPROVE',
         resource: 'payments',
         action: 'approve',
-        description: 'Approve payments',
       },
     ];
 
@@ -269,27 +236,15 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
     const roleDefinitions = [
       {
         name: 'SUPER_ADMIN',
-        description: 'Full access to the entire system',
       },
       {
         name: 'ADMIN',
-        description: 'Administrative and operational access',
       },
       {
         name: 'MANAGER',
-        description: 'Management and approval access',
-      },
-      {
-        name: 'HR',
-        description: 'Human resource management access',
-      },
-      {
-        name: 'ACCOUNT',
-        description: 'Accounting and payment access',
       },
       {
         name: 'STAFF',
-        description: 'Basic operational access',
       },
     ];
 
@@ -305,7 +260,6 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
       if (!role) {
         role = manager.create(Role, {
           name: definition.name,
-          description: definition.description,
           isSystem: true,
         });
 
@@ -324,7 +278,15 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
     );
 
     const rolePermissionMap: Record<string, string[]> = {
+      // ===================================================
+      // SUPER ADMIN
+      // ===================================================
+
       SUPER_ADMIN: allPermissionNames,
+
+      // ===================================================
+      // ADMIN
+      // ===================================================
 
       ADMIN: [
         'USER_CREATE',
@@ -363,9 +325,19 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
 
         'REPORT_VIEW',
         'REPORT_EXPORT',
+
+        'PAYMENT_VIEW',
+        'PAYMENT_CREATE',
+        'PAYMENT_UPDATE',
+        'PAYMENT_APPROVE',
       ],
 
+      // ===================================================
+      // MANAGER
+      // ===================================================
+
       MANAGER: [
+        'USER_CREATE',
         'USER_VIEW',
 
         'PRODUCT_VIEW',
@@ -390,26 +362,9 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
         'REPORT_EXPORT',
       ],
 
-      HR: [
-        'USER_CREATE',
-        'USER_VIEW',
-        'USER_UPDATE',
-
-        'FILE_VIEW',
-        'FILE_DOWNLOAD',
-      ],
-
-      ACCOUNT: [
-        'ORDER_VIEW',
-
-        'PAYMENT_VIEW',
-        'PAYMENT_CREATE',
-        'PAYMENT_UPDATE',
-        'PAYMENT_APPROVE',
-
-        'REPORT_VIEW',
-        'REPORT_EXPORT',
-      ],
+      // ===================================================
+      // STAFF
+      // ===================================================
 
       STAFF: ['PRODUCT_VIEW', 'STOCK_VIEW', 'ORDER_CREATE', 'ORDER_VIEW'],
     };
@@ -476,12 +431,12 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
 
     if (!superAdminProfile) {
       const result = await manager.query(`
-          SELECT nextval('staff_id_seq') AS number
-        `);
+        SELECT nextval('staff_id_seq') AS number
+      `);
 
       const number = Number(result[0].number);
 
-      const staffId = `ABC${number.toString().padStart(5, '0')}`;
+      const staffId = `KH${number.toString().padStart(5, '0')}`;
 
       const passwordHash = await bcrypt.hash(superAdminPassword, 12);
 
