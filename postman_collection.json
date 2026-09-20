@@ -1,0 +1,4022 @@
+{
+  "info": {
+    "_postman_id": "e4f8d9b1-5a32-4217-bc7e-9081a2f641cd",
+    "name": "Stock Management System API",
+    "description": "Complete Postman collection for Stock Management System API. Includes Authentication, RBAC, Users, Products, Variants, Approval Workflow, Direct Operations, Excel Import/Export, Stock Adjustments, Notifications, and Reports.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "staffId",
+      "value": "KH0001",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "12345678",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "certifierId",
+      "value": "ba5249c1-bcd2-4647-9206-145a3f73c45c",
+      "type": "string"
+    },
+    {
+      "key": "approverId",
+      "value": "693a56ed-5436-4756-ba32-ff09e691fbfd",
+      "type": "string"
+    },
+    {
+      "key": "roleId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "permissionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "menuId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "brandId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "categoryId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "supplierId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "warehouseId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "productId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "variantId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "requestId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "stockAdjustmentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "stockId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "mailId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01. Authentication (/auth)",
+      "description": "User login, password changes, token refresh, and session logout.",
+      "item": [
+        {
+          "name": "Login (Auto-saves accessToken)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "query": []
+            },
+            "description": "Authenticates a user with staffId and password. Automatically stores accessToken and refreshToken into collection variables.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"staffId\": \"{{staffId}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.accessToken) {",
+                  "        pm.collectionVariables.set('accessToken', jsonData.accessToken);",
+                  "        try { pm.environment.set('accessToken', jsonData.accessToken); } catch(e) {}",
+                  "        console.log('Saved accessToken');",
+                  "    }",
+                  "    if (jsonData.refreshToken) {",
+                  "        pm.collectionVariables.set('refreshToken', jsonData.refreshToken);",
+                  "        try { pm.environment.set('refreshToken', jsonData.refreshToken); } catch(e) {}",
+                  "        console.log('Saved refreshToken');",
+                  "    }",
+                  "    if (jsonData.user && jsonData.user.id) {",
+                  "        pm.collectionVariables.set('userId', jsonData.user.id);",
+                  "        try { pm.environment.set('userId', jsonData.user.id); } catch(e) {}",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ],
+              "query": []
+            },
+            "description": "Refreshes the accessToken using the saved refreshToken.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.accessToken) {",
+                  "        pm.collectionVariables.set('accessToken', jsonData.accessToken);",
+                  "        try { pm.environment.set('accessToken', jsonData.accessToken); } catch(e) {}",
+                  "    }",
+                  "    if (jsonData.refreshToken) {",
+                  "        pm.collectionVariables.set('refreshToken', jsonData.refreshToken);",
+                  "        try { pm.environment.set('refreshToken', jsonData.refreshToken); } catch(e) {}",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/change-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "change-password"
+              ],
+              "query": []
+            },
+            "description": "Changes the user's password. Clears mustChangePassword flag on first login.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"oldPassword\": \"{{password}}\",\n  \"newPassword\": \"NewSecurePassword123!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ],
+              "query": []
+            },
+            "description": "Revokes the session and active refresh token.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02. Users (/users)",
+      "description": "User profile, staff creation, and role assignments.",
+      "item": [
+        {
+          "name": "Get Current User (Me)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "me"
+              ],
+              "query": []
+            },
+            "description": "Retrieves full profile, roles, and assigned permissions of the authenticated user."
+          },
+          "response": []
+        },
+        {
+          "name": "List Users (Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users?page=1&limit=10&search=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Items per page"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Search by staffId, name, email, phone"
+                }
+              ]
+            },
+            "description": "Returns a paginated list of users."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var res = pm.response.json();",
+                  "    if (res.data && res.data.length > 0) {",
+                  "        pm.collectionVariables.set('userId', res.data[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create User (Staff)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ],
+              "query": []
+            },
+            "description": "Creates a new staff account with auto-generated staffId (e.g. KH0009) and temporary password.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"newstaff@company.com\",\n  \"firstName\": \"Sok\",\n  \"lastName\": \"Dara\",\n  \"phone\": \"+85512999888\",\n  \"gender\": \"MALE\",\n  \"dob\": \"1998-05-15\",\n  \"roleId\": \"{{roleId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Roles",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}/roles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}",
+                "roles"
+              ],
+              "query": []
+            },
+            "description": "Retrieves the active roles assigned to a user."
+          },
+          "response": []
+        },
+        {
+          "name": "Update User Role",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}/role",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}",
+                "role"
+              ],
+              "query": []
+            },
+            "description": "Updates the primary role of a user.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleId\": \"{{roleId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03. Roles & Permissions (/roles, /permissions)",
+      "description": "Role definitions, permission bindings, and menu mappings.",
+      "item": [
+        {
+          "name": "List Roles",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/roles?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roles"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": ""
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Returns paginated roles with assigned permissions and menus."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var res = pm.response.json();",
+                  "    var items = res.data || res;",
+                  "    if (items && items.length > 0) {",
+                  "        pm.collectionVariables.set('roleId', items[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Role By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/roles/{{roleId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roles",
+                "{{roleId}}"
+              ],
+              "query": []
+            },
+            "description": "Retrieves details of a single role."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Role",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/roles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roles"
+              ],
+              "query": []
+            },
+            "description": "Creates a new system role.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"WAREHOUSE_MANAGER\",\n  \"description\": \"Manages warehouse stock and transfers\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Role Permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/roles/{{roleId}}/permissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roles",
+                "{{roleId}}",
+                "permissions"
+              ],
+              "query": []
+            },
+            "description": "Retrieves all permissions currently bound to the role."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Role Permissions For Management (Checklist)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/roles/{{roleId}}/permissions/manage",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roles",
+                "{{roleId}}",
+                "permissions",
+                "manage"
+              ],
+              "query": []
+            },
+            "description": "Returns all system permissions grouped by resource with isAssigned boolean flags for UI checkboxes."
+          },
+          "response": []
+        },
+        {
+          "name": "Assign Permissions to Role",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/roles/{{roleId}}/permissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roles",
+                "{{roleId}}",
+                "permissions"
+              ],
+              "query": []
+            },
+            "description": "Assigns a list of permission UUIDs to a role.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permissionIds\": [\n    \"{{permissionId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Permission From Role",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/roles/{{roleId}}/permissions/{{permissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roles",
+                "{{roleId}}",
+                "permissions",
+                "{{permissionId}}"
+              ],
+              "query": []
+            },
+            "description": "Unbinds a specific permission from a role."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Role Menus",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/roles/{{roleId}}/menus",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roles",
+                "{{roleId}}",
+                "menus"
+              ],
+              "query": []
+            },
+            "description": "Retrieves active navigation menus accessible to this role."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Role Menus For Management (Checklist)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/roles/{{roleId}}/menus/manage",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roles",
+                "{{roleId}}",
+                "menus",
+                "manage"
+              ],
+              "query": []
+            },
+            "description": "Returns all hierarchical menus with isAssigned flags for role management UI."
+          },
+          "response": []
+        },
+        {
+          "name": "Add Menu to Role",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/roles/{{roleId}}/menus/{{menuId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roles",
+                "{{roleId}}",
+                "menus",
+                "{{menuId}}"
+              ],
+              "query": []
+            },
+            "description": "Enables a navigation menu for a role."
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Menu from Role",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/roles/{{roleId}}/menus/{{menuId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roles",
+                "{{roleId}}",
+                "menus",
+                "{{menuId}}"
+              ],
+              "query": []
+            },
+            "description": "Revokes a navigation menu from a role."
+          },
+          "response": []
+        },
+        {
+          "name": "List Permissions (Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/permissions?page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": ""
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Returns paginated permissions list."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var res = pm.response.json();",
+                  "    var items = res.data || res;",
+                  "    if (items && items.length > 0) {",
+                  "        pm.collectionVariables.set('permissionId', items[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Permission By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/permissions/{{permissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "permissions",
+                "{{permissionId}}"
+              ],
+              "query": []
+            },
+            "description": "Retrieves a single permission by UUID."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Single Permission",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/permissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "permissions"
+              ],
+              "query": []
+            },
+            "description": "Creates a new individual permission.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"REPORT_EXPORT\",\n  \"resource\": \"report\",\n  \"action\": \"export\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Permissions in Bulk",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/permissions/bulk",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "permissions",
+                "bulk"
+              ],
+              "query": []
+            },
+            "description": "Creates multiple permissions in one request.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permissions\": [\n    {\n      \"name\": \"ANALYTICS_VIEW\",\n      \"resource\": \"analytics\",\n      \"action\": \"view\"\n    },\n    {\n      \"name\": \"ANALYTICS_EXPORT\",\n      \"resource\": \"analytics\",\n      \"action\": \"export\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create CRUD Permissions By Resource",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/permissions/resources",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "permissions",
+                "resources"
+              ],
+              "query": []
+            },
+            "description": "Automatically generates CREATE, VIEW, UPDATE, DELETE permissions for the given resource.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource\": \"discount\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "04. Menu Navigation (/menu)",
+      "description": "Dynamic frontend navigation menu hierarchies.",
+      "item": [
+        {
+          "name": "Get Current User Navigation Menus",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/menu",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "menu"
+              ],
+              "query": []
+            },
+            "description": "Returns hierarchical navigation tree authorized for the current user."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var res = pm.response.json();",
+                  "    if (res && res.length > 0) {",
+                  "        pm.collectionVariables.set('menuId', res[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Menu Item By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/menu/{{menuId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "menu",
+                "{{menuId}}"
+              ],
+              "query": []
+            },
+            "description": "Retrieves a menu item by ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Menu Item",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/menu",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "menu"
+              ],
+              "query": []
+            },
+            "description": "Creates a new top-level or child navigation menu.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"discounts\",\n  \"label\": \"Discounts & Promos\",\n  \"path\": \"/discounts\",\n  \"icon\": \"tag\",\n  \"parentId\": null,\n  \"sortOrder\": 6\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Menu Item",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/menu/{{menuId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "menu",
+                "{{menuId}}"
+              ],
+              "query": []
+            },
+            "description": "Updates menu label, icon, path, or sort order.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Discounts\",\n  \"sortOrder\": 7\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Menu Item",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/menu/{{menuId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "menu",
+                "{{menuId}}"
+              ],
+              "query": []
+            },
+            "description": "Removes a menu item from the system."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "05. Brands (/brands)",
+      "description": "Brand catalog management with global pagination.",
+      "item": [
+        {
+          "name": "List Brands (Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/brands?page=1&limit=10&search=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "brands"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": ""
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": ""
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Returns paginated brands matching search keyword."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var res = pm.response.json();",
+                  "    if (res.data && res.data.length > 0) {",
+                  "        pm.collectionVariables.set('brandId', res.data[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Brand By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/brands/{{brandId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "brands",
+                "{{brandId}}"
+              ],
+              "query": []
+            },
+            "description": "Retrieves brand details by UUID."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Brand",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/brands",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "brands"
+              ],
+              "query": []
+            },
+            "description": "Creates a new brand.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"SAMSUNG\",\n  \"name\": \"Samsung Electronics\",\n  \"description\": \"Official Samsung brand products\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Brand",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/brands/{{brandId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "brands",
+                "{{brandId}}"
+              ],
+              "query": []
+            },
+            "description": "Updates brand details.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Samsung Global\",\n  \"description\": \"Updated description\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate Brand",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/brands/{{brandId}}/deactivate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "brands",
+                "{{brandId}}",
+                "deactivate"
+              ],
+              "query": []
+            },
+            "description": "Deactivates brand without deleting history."
+          },
+          "response": []
+        },
+        {
+          "name": "Activate Brand",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/brands/{{brandId}}/activate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "brands",
+                "{{brandId}}",
+                "activate"
+              ],
+              "query": []
+            },
+            "description": "Re-activates brand."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "06. Categories (/categories)",
+      "description": "Product categories hierarchy.",
+      "item": [
+        {
+          "name": "List Categories (Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories?page=1&limit=10&search=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": ""
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": ""
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Returns paginated categories."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var res = pm.response.json();",
+                  "    if (res.data && res.data.length > 0) {",
+                  "        pm.collectionVariables.set('categoryId', res.data[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Category By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{categoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{categoryId}}"
+              ],
+              "query": []
+            },
+            "description": "Retrieves single category."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ],
+              "query": []
+            },
+            "description": "Creates a new category.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"TABLETS\",\n  \"name\": \"Tablets & iPads\",\n  \"description\": \"Tablet devices and accessories\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Category",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{categoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{categoryId}}"
+              ],
+              "query": []
+            },
+            "description": "Updates category.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Tablets & E-Readers\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate Category",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{categoryId}}/deactivate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{categoryId}}",
+                "deactivate"
+              ],
+              "query": []
+            },
+            "description": "Deactivates category."
+          },
+          "response": []
+        },
+        {
+          "name": "Activate Category",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{categoryId}}/activate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{categoryId}}",
+                "activate"
+              ],
+              "query": []
+            },
+            "description": "Re-activates category."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Category",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{categoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{categoryId}}"
+              ],
+              "query": []
+            },
+            "description": "Permanently deletes category if unused."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "07. Suppliers (/suppliers)",
+      "description": "Supplier profiles and contacts.",
+      "item": [
+        {
+          "name": "List Suppliers (Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/suppliers?page=1&limit=10&search=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "suppliers"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": ""
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": ""
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Returns paginated suppliers."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var res = pm.response.json();",
+                  "    if (res.data && res.data.length > 0) {",
+                  "        pm.collectionVariables.set('supplierId', res.data[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Supplier By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/suppliers/{{supplierId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "suppliers",
+                "{{supplierId}}"
+              ],
+              "query": []
+            },
+            "description": "Retrieves supplier details."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Supplier",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/suppliers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "suppliers"
+              ],
+              "query": []
+            },
+            "description": "Creates a new supplier.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"TECH-HUB-ASIA\",\n  \"name\": \"Tech Hub Asia Distribution\",\n  \"contactPerson\": \"David Lim\",\n  \"email\": \"orders@techhubasia.com\",\n  \"phone\": \"+85523888999\",\n  \"address\": \"Phnom Penh, Cambodia\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Supplier",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/suppliers/{{supplierId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "suppliers",
+                "{{supplierId}}"
+              ],
+              "query": []
+            },
+            "description": "Updates supplier details.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contactPerson\": \"David Lim (VP Sales)\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate Supplier",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/suppliers/{{supplierId}}/deactivate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "suppliers",
+                "{{supplierId}}",
+                "deactivate"
+              ],
+              "query": []
+            },
+            "description": "Deactivates supplier."
+          },
+          "response": []
+        },
+        {
+          "name": "Activate Supplier",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/suppliers/{{supplierId}}/activate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "suppliers",
+                "{{supplierId}}",
+                "activate"
+              ],
+              "query": []
+            },
+            "description": "Re-activates supplier."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "08. Warehouses (/warehouses)",
+      "description": "Warehouse facilities and storage locations.",
+      "item": [
+        {
+          "name": "List Warehouses (Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/warehouses?page=1&limit=10&search=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "warehouses"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": ""
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": ""
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Returns paginated warehouses."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var res = pm.response.json();",
+                  "    if (res.data && res.data.length > 0) {",
+                  "        pm.collectionVariables.set('warehouseId', res.data[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Warehouse By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/warehouses/{{warehouseId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "warehouses",
+                "{{warehouseId}}"
+              ],
+              "query": []
+            },
+            "description": "Retrieves warehouse details."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Warehouse",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/warehouses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "warehouses"
+              ],
+              "query": []
+            },
+            "description": "Creates a new warehouse.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"WH-NORTH\",\n  \"name\": \"North Logistics Center\",\n  \"address\": \"Sen Sok, Phnom Penh\",\n  \"contactPerson\": \"Chan Vanna\",\n  \"phone\": \"+85512777666\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Warehouse",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/warehouses/{{warehouseId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "warehouses",
+                "{{warehouseId}}"
+              ],
+              "query": []
+            },
+            "description": "Updates warehouse.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"North Central Logistics Depot\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate Warehouse",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/warehouses/{{warehouseId}}/deactivate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "warehouses",
+                "{{warehouseId}}",
+                "deactivate"
+              ],
+              "query": []
+            },
+            "description": "Deactivates warehouse."
+          },
+          "response": []
+        },
+        {
+          "name": "Activate Warehouse",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/warehouses/{{warehouseId}}/activate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "warehouses",
+                "{{warehouseId}}",
+                "activate"
+              ],
+              "query": []
+            },
+            "description": "Re-activates warehouse."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "09. Products (/products)",
+      "description": "Product catalog, direct creation (Admin), dynamic Excel exports & imports.",
+      "item": [
+        {
+          "name": "List Products (Paginated & Dynamic Filter)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/products?page=1&limit=10&search=&brand=Apple&category=Smartphone&startDate=2026-09-01&endDate=2026-09-30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Items per page"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Keyword in name, code, sku, barcode"
+                },
+                {
+                  "key": "brand",
+                  "value": "Apple",
+                  "description": "Filter by brand name or code"
+                },
+                {
+                  "key": "category",
+                  "value": "Smartphone",
+                  "description": "Filter by category name or code"
+                },
+                {
+                  "key": "startDate",
+                  "value": "2026-09-01",
+                  "description": "Start created date (YYYY-MM-DD)"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-09-30",
+                  "description": "End created date (YYYY-MM-DD)"
+                }
+              ]
+            },
+            "description": "Retrieves paginated products with variants and warehouse stock balances. Supports dynamic filters."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var res = pm.response.json();",
+                  "    if (res.data && res.data.length > 0) {",
+                  "        pm.collectionVariables.set('productId', res.data[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Product By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "{{productId}}"
+              ],
+              "query": []
+            },
+            "description": "Retrieves single product details with relations."
+          },
+          "response": []
+        },
+        {
+          "name": "Direct Product Creation (JSON - Admin & Super Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": []
+            },
+            "description": "Directly creates product, variants, and stock balances immediately without approval.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product\": {\n    \"productCode\": \"IPHONE-17-PRO\",\n    \"productName\": \"Apple iPhone 17 Pro\",\n    \"categoryCode\": \"SMARTPHONE\",\n    \"brandCode\": \"APPLE\",\n    \"hasVariants\": true,\n    \"unit\": \"pcs\",\n    \"productSku\": \"IP17P-MASTER\",\n    \"productBarcode\": \"885909000171\",\n    \"productCostPrice\": 900,\n    \"productSellingPrice\": 1199,\n    \"minimumStock\": 5,\n    \"maximumStock\": 100\n  },\n  \"variants\": [\n    {\n      \"variantCode\": \"IP17P-256-BLK\",\n      \"variantName\": \"256GB Space Black\",\n      \"variantSku\": \"IP17P-256-BLK\",\n      \"variantCostPrice\": 900,\n      \"variantSellingPrice\": 1199,\n      \"variantAttributes\": {\n        \"Storage\": \"256GB\",\n        \"Color\": \"Space Black\"\n      }\n    }\n  ],\n  \"stock\": [\n    {\n      \"productCode\": \"IPHONE-17-PRO\",\n      \"variantCode\": \"IP17P-256-BLK\",\n      \"warehouseCode\": \"WH001\",\n      \"quantity\": 25\n    }\n  ],\n  \"remark\": \"Direct catalog entry by Admin\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Direct Product Creation (Multipart Form-Data - With Variants & Images)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": []
+            },
+            "description": "Directly creates product with multiple variants and uploads images for both main product and each variant.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "product",
+                  "value": "{\"productCode\":\"MBP16-M3\",\"productName\":\"MacBook Pro 16 M3 Max\",\"categoryCode\":\"COMPUTER\",\"brandCode\":\"APPLE\",\"supplierCode\":\"TECH-HUB-ASIA\",\"hasVariants\":true,\"unit\":\"unit\",\"productSku\":\"MBP16-M3-MASTER\",\"productBarcode\":\"885909112233\",\"productCostPrice\":2800,\"productSellingPrice\":3499,\"minimumStock\":2,\"maximumStock\":50}",
+                  "type": "text"
+                },
+                {
+                  "key": "variants",
+                  "value": "[{\"variantCode\":\"MBP16-M3-BLK\",\"variantName\":\"16\\\" M3 Max Space Black 1TB\",\"variantSku\":\"MBP16-M3-BLK-1TB\",\"variantBarcode\":\"885909112240\",\"variantCostPrice\":2800,\"variantSellingPrice\":3499,\"variantAttributes\":{\"Color\":\"Space Black\",\"Storage\":\"1TB\",\"RAM\":\"36GB\"}},{\"variantCode\":\"MBP16-M3-SLV\",\"variantName\":\"16\\\" M3 Max Silver 1TB\",\"variantSku\":\"MBP16-M3-SLV-1TB\",\"variantBarcode\":\"885909112257\",\"variantCostPrice\":2800,\"variantSellingPrice\":3499,\"variantAttributes\":{\"Color\":\"Silver\",\"Storage\":\"1TB\",\"RAM\":\"36GB\"}}]",
+                  "type": "text"
+                },
+                {
+                  "key": "stock",
+                  "value": "[{\"productCode\":\"MBP16-M3\",\"variantCode\":\"MBP16-M3-BLK\",\"warehouseCode\":\"WH001\",\"quantity\":15},{\"productCode\":\"MBP16-M3\",\"variantCode\":\"MBP16-M3-SLV\",\"warehouseCode\":\"WH001\",\"quantity\":10}]",
+                  "type": "text"
+                },
+                {
+                  "key": "remark",
+                  "value": "Q4 Product Launch - MacBook Pro M3 with variant images",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "type": "file",
+                  "description": "Main product picture"
+                },
+                {
+                  "key": "variantImage[MBP16-M3-BLK]",
+                  "type": "file",
+                  "description": "Black variant image"
+                },
+                {
+                  "key": "variantImage[MBP16-M3-SLV]",
+                  "type": "file",
+                  "description": "Silver variant image"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Direct Product Creation (Multipart Form-Data - Single Product No Variants)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": []
+            },
+            "description": "Creates direct single product with main image upload when product has no variants.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "product",
+                  "value": "{\"productCode\":\"IPHONE-16-PLUS\",\"productName\":\"iPhone 16 Plus\",\"categoryCode\":\"SMARTPHONE\",\"brandCode\":\"APPLE\",\"hasVariants\":false,\"unit\":\"unit\",\"productSku\":\"IP16P-BASE\",\"productCostPrice\":799,\"productSellingPrice\":999,\"minimumStock\":5,\"maximumStock\":100}",
+                  "type": "text"
+                },
+                {
+                  "key": "stock",
+                  "value": "[{\"productCode\":\"IPHONE-16-PLUS\",\"warehouseCode\":\"WH001\",\"quantity\":20}]",
+                  "type": "text"
+                },
+                {
+                  "key": "remark",
+                  "value": "Direct single product launch without variants",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "type": "file",
+                  "description": "Single product main image (when product has no variants)"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Download Direct Product Import Template",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/products/import/template",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "import",
+                "template"
+              ],
+              "query": []
+            },
+            "description": "Downloads styled Excel .xlsx template with guides and headers for direct product import.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Direct Product Excel Import",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/products/import",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "import"
+              ],
+              "query": []
+            },
+            "description": "Directly batch imports products, variants, and stock from Excel without requiring approval.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "description": "Select filled products Excel .xlsx file"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Export Products to Excel (Dynamic Filtering)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/products/export?brand=Apple&category=Smartphone&startDate=2026-09-01&endDate=2026-09-30&search=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "export"
+              ],
+              "query": [
+                {
+                  "key": "brand",
+                  "value": "Apple",
+                  "description": "Filter by brand name or code"
+                },
+                {
+                  "key": "category",
+                  "value": "Smartphone",
+                  "description": "Filter by category name or code"
+                },
+                {
+                  "key": "startDate",
+                  "value": "2026-09-01",
+                  "description": "Filter created on or after date"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-09-30",
+                  "description": "Filter created on or before date"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Keyword in name, code, sku, barcode"
+                }
+              ]
+            },
+            "description": "Exports matching products, variants, and stocks to an Excel .xlsx spreadsheet formatted for immediate re-import."
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate Product",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}/deactivate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "{{productId}}",
+                "deactivate"
+              ],
+              "query": []
+            },
+            "description": "Deactivates product."
+          },
+          "response": []
+        },
+        {
+          "name": "Activate Product",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}/activate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "{{productId}}",
+                "activate"
+              ],
+              "query": []
+            },
+            "description": "Re-activates product."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Product",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "{{productId}}"
+              ],
+              "query": []
+            },
+            "description": "Permanently deletes product if unreferenced by historical transactions."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "10. Product Variants (/product-variants)",
+      "description": "Product variants catalog and management.",
+      "item": [
+        {
+          "name": "List Product Variants (Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/product-variants?page=1&limit=10&productId=%7B%7BproductId%7D%7D&search=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "product-variants"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": ""
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": ""
+                },
+                {
+                  "key": "productId",
+                  "value": "{{productId}}",
+                  "description": "Filter by parent product UUID"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Returns paginated product variants."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var res = pm.response.json();",
+                  "    if (res.data && res.data.length > 0) {",
+                  "        pm.collectionVariables.set('variantId', res.data[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Variant By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/product-variants/{{variantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "product-variants",
+                "{{variantId}}"
+              ],
+              "query": []
+            },
+            "description": "Retrieves single variant details."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Product Variant Directly",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/product-variants",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "product-variants"
+              ],
+              "query": []
+            },
+            "description": "Creates a new product variant directly.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"code\": \"IP15-512-BLU\",\n  \"name\": \"iPhone 15 512GB Blue\",\n  \"sku\": \"IP15-512-BLU\",\n  \"barcode\": \"885909887766\",\n  \"costPrice\": 950,\n  \"sellingPrice\": 1199,\n  \"attributes\": {\n    \"Storage\": \"512GB\",\n    \"Color\": \"Blue\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Product Variant",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/product-variants/{{variantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "product-variants",
+                "{{variantId}}"
+              ],
+              "query": []
+            },
+            "description": "Updates variant details.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sellingPrice\": 1149\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate Variant",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/product-variants/{{variantId}}/deactivate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "product-variants",
+                "{{variantId}}",
+                "deactivate"
+              ],
+              "query": []
+            },
+            "description": "Deactivates variant."
+          },
+          "response": []
+        },
+        {
+          "name": "Activate Variant",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/product-variants/{{variantId}}/activate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "product-variants",
+                "{{variantId}}",
+                "activate"
+              ],
+              "query": []
+            },
+            "description": "Re-activates variant."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Variant",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/product-variants/{{variantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "product-variants",
+                "{{variantId}}"
+              ],
+              "query": []
+            },
+            "description": "Deletes variant if not referenced by stock or transactions."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "11. Requests & Approval Workflow (/requests)",
+      "description": "Enterprise approval workflows for products, variants, stock in/out/transfer, and stock adjustments.",
+      "item": [
+        {
+          "name": "List Requests (Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/requests?page=1&limit=10&search=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "requests"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": ""
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": ""
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Returns paginated workflow requests visible to the user."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var res = pm.response.json();",
+                  "    if (res.data && res.data.length > 0) {",
+                  "        pm.collectionVariables.set('requestId', res.data[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Request By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/requests/{{requestId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "requests",
+                "{{requestId}}"
+              ],
+              "query": []
+            },
+            "description": "Retrieves request details with items, history, and approver status."
+          },
+          "response": []
+        },
+        {
+          "name": "Download Request Excel Template (By Type)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/requests/import/template?type=PRODUCT_CREATE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "requests",
+                "import",
+                "template"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "PRODUCT_CREATE",
+                  "description": "PRODUCT_CREATE, PRODUCT_UPDATE, VARIANT_CREATE, VARIANT_UPDATE, STOCK_IN, STOCK_OUT, STOCK_TRANSFER, STOCK_ADJUSTMENT"
+                }
+              ]
+            },
+            "description": "Downloads styled Excel template for the specified workflow type.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Excel Import Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/requests/import",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "requests",
+                "import"
+              ],
+              "query": []
+            },
+            "description": "Creates a pending workflow request from an Excel spreadsheet.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "description": "Excel template file"
+                },
+                {
+                  "key": "requestType",
+                  "value": "PRODUCT_CREATE",
+                  "type": "text"
+                },
+                {
+                  "key": "approvers",
+                  "value": "[{\"step\":1,\"actionType\":\"CERTIFIER\",\"userId\":\"{{certifierId}}\"},{\"step\":2,\"actionType\":\"APPROVER\",\"userId\":\"{{approverId}}\"}]",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Manual Request - PRODUCT_CREATE (With Variants & Variant Images)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "requests"
+              ],
+              "query": []
+            },
+            "description": "Submits a PRODUCT_CREATE workflow request with variants, variant-specific images, and sequential approvers.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "requestType",
+                  "value": "PRODUCT_CREATE",
+                  "type": "text"
+                },
+                {
+                  "key": "product",
+                  "value": "{\"productCode\":\"MBP16-M3\",\"productName\":\"MacBook Pro 16 M3 Max\",\"categoryCode\":\"COMPUTER\",\"brandCode\":\"APPLE\",\"supplierCode\":\"TECH-HUB-ASIA\",\"hasVariants\":true,\"unit\":\"unit\",\"productSku\":\"MBP16-M3-MASTER\",\"productBarcode\":\"885909112233\",\"productCostPrice\":2800,\"productSellingPrice\":3499,\"minimumStock\":2,\"maximumStock\":50}",
+                  "type": "text"
+                },
+                {
+                  "key": "variants",
+                  "value": "[{\"variantCode\":\"MBP16-M3-BLK\",\"variantName\":\"16\\\" M3 Max Space Black 1TB\",\"variantSku\":\"MBP16-M3-BLK-1TB\",\"variantBarcode\":\"885909112240\",\"variantCostPrice\":2800,\"variantSellingPrice\":3499,\"variantAttributes\":{\"Color\":\"Space Black\",\"Storage\":\"1TB\",\"RAM\":\"36GB\"}},{\"variantCode\":\"MBP16-M3-SLV\",\"variantName\":\"16\\\" M3 Max Silver 1TB\",\"variantSku\":\"MBP16-M3-SLV-1TB\",\"variantBarcode\":\"885909112257\",\"variantCostPrice\":2800,\"variantSellingPrice\":3499,\"variantAttributes\":{\"Color\":\"Silver\",\"Storage\":\"1TB\",\"RAM\":\"36GB\"}}]",
+                  "type": "text"
+                },
+                {
+                  "key": "stock",
+                  "value": "[{\"productCode\":\"MBP16-M3\",\"variantCode\":\"MBP16-M3-BLK\",\"warehouseCode\":\"WH001\",\"quantity\":15},{\"productCode\":\"MBP16-M3\",\"variantCode\":\"MBP16-M3-SLV\",\"warehouseCode\":\"WH001\",\"quantity\":10}]",
+                  "type": "text"
+                },
+                {
+                  "key": "approvers",
+                  "value": "[{\"step\":1,\"actionType\":\"CERTIFIER\",\"userId\":\"{{certifierId}}\"},{\"step\":2,\"actionType\":\"APPROVER\",\"userId\":\"{{approverId}}\"}]",
+                  "type": "text"
+                },
+                {
+                  "key": "remark",
+                  "value": "Q4 Product Launch - MacBook Pro M3",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "type": "file",
+                  "description": "Main product picture"
+                },
+                {
+                  "key": "variantImage[MBP16-M3-BLK]",
+                  "type": "file",
+                  "description": "Black variant image"
+                },
+                {
+                  "key": "variantImage[MBP16-M3-SLV]",
+                  "type": "file",
+                  "description": "Silver variant image"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Manual Request - PRODUCT_CREATE (Single Product - No Variants)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "requests"
+              ],
+              "query": []
+            },
+            "description": "Submits a PRODUCT_CREATE workflow request for a single product with main image and no variants.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "requestType",
+                  "value": "PRODUCT_CREATE",
+                  "type": "text"
+                },
+                {
+                  "key": "product",
+                  "value": "{\"productCode\":\"IPHONE-16-PLUS\",\"productName\":\"iPhone 16 Plus\",\"categoryCode\":\"SMARTPHONE\",\"brandCode\":\"APPLE\",\"hasVariants\":false,\"unit\":\"unit\",\"productSku\":\"IP16P-BASE\",\"productCostPrice\":799,\"productSellingPrice\":999,\"minimumStock\":5,\"maximumStock\":100}",
+                  "type": "text"
+                },
+                {
+                  "key": "stock",
+                  "value": "[{\"productCode\":\"IPHONE-16-PLUS\",\"warehouseCode\":\"WH001\",\"quantity\":20}]",
+                  "type": "text"
+                },
+                {
+                  "key": "approvers",
+                  "value": "[{\"step\":1,\"actionType\":\"APPROVER\",\"userId\":\"{{approverId}}\"}]",
+                  "type": "text"
+                },
+                {
+                  "key": "remark",
+                  "value": "Single product launch without variants",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "type": "file",
+                  "description": "Main product picture (for product with no variants)"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Manual Request - STOCK_IN",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "requests"
+              ],
+              "query": []
+            },
+            "description": "Submits a STOCK_IN workflow request.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "requestType",
+                  "value": "STOCK_IN",
+                  "type": "text"
+                },
+                {
+                  "key": "stock",
+                  "value": "[{\"productCode\":\"IP15\",\"warehouseCode\":\"WH001\",\"quantity\":30,\"basePrice\":700,\"sellingPrice\":899}]",
+                  "type": "text"
+                },
+                {
+                  "key": "approvers",
+                  "value": "[{\"step\":1,\"actionType\":\"APPROVER\",\"userId\":\"{{approverId}}\"}]",
+                  "type": "text"
+                },
+                {
+                  "key": "remark",
+                  "value": "Supplier shipment received",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Manual Request - STOCK_TRANSFER",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "requests"
+              ],
+              "query": []
+            },
+            "description": "Submits an inter-warehouse stock transfer request.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "requestType",
+                  "value": "STOCK_TRANSFER",
+                  "type": "text"
+                },
+                {
+                  "key": "stock",
+                  "value": "[{\"productCode\":\"IP15\",\"fromWarehouseCode\":\"WH001\",\"toWarehouseCode\":\"WH-NORTH\",\"quantity\":5}]",
+                  "type": "text"
+                },
+                {
+                  "key": "approvers",
+                  "value": "[{\"step\":1,\"actionType\":\"APPROVER\",\"userId\":\"{{approverId}}\"}]",
+                  "type": "text"
+                },
+                {
+                  "key": "remark",
+                  "value": "Inter-branch warehouse stock rebalance",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Manual Request - STOCK_ADJUSTMENT (Workflow)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "requests"
+              ],
+              "query": []
+            },
+            "description": "Submits a stock adjustment request through the approval workflow.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "requestType",
+                  "value": "STOCK_ADJUSTMENT",
+                  "type": "text"
+                },
+                {
+                  "key": "adjustments",
+                  "value": "[{\"productCode\":\"IP15\",\"warehouseCode\":\"WH001\",\"adjustmentType\":\"INCREASE\",\"quantity\":10,\"reason\":\"Stock recount surplus\"}]",
+                  "type": "text"
+                },
+                {
+                  "key": "approvers",
+                  "value": "[{\"step\":1,\"actionType\":\"APPROVER\",\"userId\":\"{{approverId}}\"}]",
+                  "type": "text"
+                },
+                {
+                  "key": "remark",
+                  "value": "Warehouse audit discrepancy adjustment",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Commit / Approve Request (Next Step or Finalize)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/requests/{{requestId}}/commit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "requests",
+                "{{requestId}}",
+                "commit"
+              ],
+              "query": []
+            },
+            "description": "Approves the current workflow step. When the final step is approved, automatically applies data to database.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"APPROVED\",\n  \"remark\": \"Approved by manager\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reject Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/requests/{{requestId}}/commit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "requests",
+                "{{requestId}}",
+                "commit"
+              ],
+              "query": []
+            },
+            "description": "Rejects the request and terminates the workflow.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"REJECTED\",\n  \"remark\": \"Quantities do not match physical pallet count\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "12. Direct Stock Adjustments (/stock-adjustments)",
+      "description": "Direct inventory adjustments for Admins and Super Admins without approval workflow.",
+      "item": [
+        {
+          "name": "Direct Stock Adjust (Manual - Increase / Decrease)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/stock-adjustments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock-adjustments"
+              ],
+              "query": []
+            },
+            "description": "Directly adjusts inventory balances immediately (Admin & Super Admin only).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"adjustments\": [\n    {\n      \"productCode\": \"IP15\",\n      \"warehouseCode\": \"WH001\",\n      \"adjustmentType\": \"INCREASE\",\n      \"quantity\": 5,\n      \"reason\": \"Immediate audit correction\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Download Direct Adjustment Template",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/stock-adjustments/import/template",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock-adjustments",
+                "import",
+                "template"
+              ],
+              "query": []
+            },
+            "description": "Downloads styled Excel template with adjustment_type, quantity, reason columns.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Direct Stock Adjustment Excel Import (Option 3 Flexible)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/stock-adjustments/import",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock-adjustments",
+                "import"
+              ],
+              "query": []
+            },
+            "description": "Directly imports and commits stock adjustments from Excel without approval.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "description": "Excel .xlsx file (supports explicit adjustment_type or signed +/- quantities)"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Paginated Stock Adjustment Audit History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/stock-adjustments?page=1&limit=10&productCode=&warehouseCode=&adjustmentType=&search=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock-adjustments"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": ""
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": ""
+                },
+                {
+                  "key": "productCode",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "warehouseCode",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "adjustmentType",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Returns paginated audit log of all direct stock adjustments with adjustedBy user relations."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var res = pm.response.json();",
+                  "    if (res.data && res.data.length > 0) {",
+                  "        pm.collectionVariables.set('stockAdjustmentId', res.data[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Stock Adjustment Audit Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/stock-adjustments/{{stockAdjustmentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock-adjustments",
+                "{{stockAdjustmentId}}"
+              ],
+              "query": []
+            },
+            "description": "Retrieves single stock adjustment audit record."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "13. Stock Balances (/stock)",
+      "description": "Direct warehouse inventory balances.",
+      "item": [
+        {
+          "name": "List All Stock Balances",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/stock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock"
+              ],
+              "query": []
+            },
+            "description": "Returns warehouse inventory records."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var res = pm.response.json();",
+                  "    if (res && res.length > 0) {",
+                  "        pm.collectionVariables.set('stockId', res[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Stock By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/stock/{{stockId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock",
+                "{{stockId}}"
+              ],
+              "query": []
+            },
+            "description": "Retrieves specific stock balance record."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Direct Stock Record",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/stock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock"
+              ],
+              "query": []
+            },
+            "description": "Creates direct stock balance.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"variantId\": null,\n  \"warehouseId\": \"{{warehouseId}}\",\n  \"quantity\": 50\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Stock Record",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/stock/{{stockId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock",
+                "{{stockId}}"
+              ],
+              "query": []
+            },
+            "description": "Updates stock record.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 45\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Stock Record",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/stock/{{stockId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock",
+                "{{stockId}}"
+              ],
+              "query": []
+            },
+            "description": "Removes stock record."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "14. Mails & Notifications (/mails)",
+      "description": "In-app notifications and email dispatch logs.",
+      "item": [
+        {
+          "name": "List My Notification Mails (Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/mails?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mails"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": ""
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Returns paginated audit notifications for the user."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var res = pm.response.json();",
+                  "    if (res.data && res.data.length > 0) {",
+                  "        pm.collectionVariables.set('mailId', res.data[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Unread Mail Count",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/mails/unread-count",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mails",
+                "unread-count"
+              ],
+              "query": []
+            },
+            "description": "Returns count of unread notification mails for header bell badge."
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Mail as Read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/mails/{{mailId}}/read",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mails",
+                "{{mailId}}",
+                "read"
+              ],
+              "query": []
+            },
+            "description": "Marks an in-app notification mail as read."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "15. Sales & Telegram Reports (/reports)",
+      "description": "Sales, revenue, profit summaries, and automated Telegram bot reports.",
+      "item": [
+        {
+          "name": "Get Sales & Stock Summary (JSON)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/summary?period=daily",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "daily",
+                  "description": "daily or weekly"
+                }
+              ]
+            },
+            "description": "Calculates total spending, total selling, gross profit, and stock alerts."
+          },
+          "response": []
+        },
+        {
+          "name": "Preview Telegram HTML Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/preview?period=weekly",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "preview"
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "weekly",
+                  "description": "daily or weekly"
+                }
+              ]
+            },
+            "description": "Returns the formatted HTML message sent to Telegram channel/group."
+          },
+          "response": []
+        },
+        {
+          "name": "Trigger Daily Telegram Report Manually",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/telegram/daily",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "telegram",
+                "daily"
+              ],
+              "query": []
+            },
+            "description": "Immediately runs and sends the Daily Summary Report to Telegram."
+          },
+          "response": []
+        },
+        {
+          "name": "Trigger Weekly Telegram Report Manually",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text",
+                "disabled": null
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/telegram/weekly",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "telegram",
+                "weekly"
+              ],
+              "query": []
+            },
+            "description": "Immediately runs and sends the Weekly Summary Report to Telegram."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

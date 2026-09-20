@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: stock-management
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: stock-management-db
+      POSTGRES_USER: Vynn82
+      POSTGRES_PASSWORD: 123
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

@@ -1,8 +1,6 @@
-import { ArrayNotEmpty, IsArray, IsUUID } from 'class-validator';
+import { IsUUID } from 'class-validator';
 
-export class UpdateUserRolesDto {
-  @IsArray()
-  @ArrayNotEmpty()
-  @IsUUID('4', { each: true })
-  roleIds: string[];
+export class UpdateUserRoleDto {
+  @IsUUID()
+  roleId: string;
 }

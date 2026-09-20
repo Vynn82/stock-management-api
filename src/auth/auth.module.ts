@@ -11,13 +11,17 @@ import { User } from '../users/entities/user.entity';
 import { UserRole } from '../users/entities/user-role.entity';
 
 import { SessionsModule } from '../sessions/sessions.module';
+import { UsersModule } from '../users/users.module';
 
 import { AccessTokenGuard } from './guard/access-token.guard';
 import { MustChangePasswordGuard } from './guard/must-change-password.guard';
+import { RolePermission } from '../roles/role-permission.entity';
+import { PermissionGuard } from './guard/permission.guard';
+import { RolesGuard } from './guard/roles.guard';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, UserRole]),
+    TypeOrmModule.forFeature([User, UserRole, RolePermission]),
 
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -27,12 +31,13 @@ import { MustChangePasswordGuard } from './guard/must-change-password.guard';
         secret: configService.getOrThrow<string>('JWT_ACCESS_SECRET'),
 
         signOptions: {
-          expiresIn: '15m',
+          expiresIn: '3000m',
         },
       }),
     }),
 
     SessionsModule,
+    UsersModule,
   ],
 
   controllers: [AuthController],
@@ -48,6 +53,14 @@ import { MustChangePasswordGuard } from './guard/must-change-password.guard';
     {
       provide: APP_GUARD,
       useClass: MustChangePasswordGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: PermissionGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
     },
   ],
 })

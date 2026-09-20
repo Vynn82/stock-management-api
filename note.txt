@@ -5,6 +5,7 @@ npx typeorm-ts-node-commonjs migration:create src/database/migrations/CreateUser
 run migration
 npx typeorm-ts-node-commonjs -d src/database/data-source.ts migration:run
 
+npx typeorm-ts-node-commonjs migration:create src/database/migrations/CreateMenus
 
 npm i
 npm install class-validator class-transformer
@@ -159,3 +160,9 @@ const permissions = [
     description: 'Approve orders',
   },
 ];
+
+
+
+PS D:\Coding_D\stock-management-api> npx typeorm-ts-node-commonjs migration:create src/database/migrations/CreateRoleMenus
+Migration D:\Coding_D\stock-management-api\src\database\migrations/1788069232181-CreateRoleMenus.ts has been generated successfully.
+PS D:\Coding_D\stock-management-api> npx typeorm-ts-node-commonjs migration:run -d src/database/data-source.ts

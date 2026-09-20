@@ -14,6 +14,7 @@ import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 
 import { SessionsService } from '../sessions/sessions.service';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class AuthService {
@@ -27,6 +28,8 @@ export class AuthService {
     private readonly jwtService: JwtService,
 
     private readonly sessionsService: SessionsService,
+
+    private readonly usersService: UsersService,
   ) {}
 
   // =====================================================
@@ -92,11 +95,15 @@ export class AuthService {
 
     await this.userRepository.save(user);
 
-    // 10. Return tokens
+    // 10. Get full user details (profile, roles, permissions, menus)
+    const userDetails = await this.usersService.getMe(user.id);
+
+    // 11. Return tokens and user
     return {
       accessToken,
       refreshToken,
       mustChangePassword: user.mustChangePassword,
+      user: userDetails,
     };
   }
 
@@ -173,6 +180,51 @@ export class AuthService {
   async changePassword(userId: string, changePasswordDto: ChangePasswordDto) {
     const { currentPassword, newPassword } = changePasswordDto;
 
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .addSelect('user.passwordHash')
+      .where('user.id = :userId', { userId })
+      .getOne();
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const passwordValid = await bcrypt.compare(
+      currentPassword,
+      user.passwordHash,
+    );
+
+    if (!passwordValid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const samePassword = await bcrypt.compare(newPassword, user.passwordHash);
+
+    if (samePassword) {
+      throw new UnauthorizedException(
+        'New password must be different from current password',
+      );
+    }
+
+    user.passwordHash = await bcrypt.hash(newPassword, 12);
+    user.mustChangePassword = false;
+
+    await this.userRepository.save(user);
+
+    const tokens = await this.generateTokens(user);
+
+    return {
+      ...tokens,
+      mustChangePassword: false,
+    };
+  }
+  async changePasswordOLD(
+    userId: string,
+    changePasswordDto: ChangePasswordDto,
+  ) {
+    const { currentPassword, newPassword } = changePasswordDto;
+
     // 1. Get user
     const user = await this.userRepository
       .createQueryBuilder('user')
@@ -215,6 +267,35 @@ export class AuthService {
 
     return {
       message: 'Password changed successfully',
+    };
+  }
+  private async generateTokens(user: User) {
+    const userRoles = await this.userRoleRepository.find({
+      where: {
+        userId: user.id,
+      },
+      relations: {
+        role: true,
+      },
+    });
+
+    const roles = userRoles.map((userRole) => userRole.role.name);
+
+    const accessToken = await this.jwtService.signAsync({
+      sub: user.id,
+      staffId: user.staffId,
+      roles,
+    });
+
+    const refreshToken = crypto.randomBytes(64).toString('hex');
+
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    await this.sessionsService.createSession(user.id, refreshToken, expiresAt);
+
+    return {
+      accessToken,
+      refreshToken,
     };
   }
 }

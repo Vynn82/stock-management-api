@@ -11,5 +11,10 @@ async function bootstrap() {
     }),
   );
   await app.listen(process.env.PORT ?? 3000);
+  app.enableCors({
+    origin: ['http://localhost:8200', 'http://127.0.0.1:8200'],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
+  });
 }
 bootstrap();
