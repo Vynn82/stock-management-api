@@ -1,98 +1,407 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# 📦 Stock Management API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A scalable **Stock Management System API** built with **NestJS, TypeScript, PostgreSQL, TypeORM, JWT, and RBAC**.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+The system provides authentication, user and role management, product management, inventory management, stock workflows, approval processes, Excel import/export, notifications, and reporting.
 
-## Description
+---
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## 🚀 Features
 
-## Project setup
+### 🔐 Authentication & Security
 
-```bash
-$ npm install
+- Login with Staff ID and password
+- JWT access token authentication
+- Refresh token authentication
+- Password change functionality
+- Temporary password and first-login password change flow
+- Authentication guards
+- Password-change protection
+- Role-Based Access Control (RBAC)
+- Permission-based authorization
+- Super Admin permission bypass
+
+### 👥 User & Access Management
+
+- User management
+- Staff management
+- Role management
+- Permission management
+- User role assignment
+- Role permission management
+- Hierarchical menu management
+- Permission-based menu access
+
+### 🏷️ Master Data Management
+
+- Brand management
+- Category management
+- Supplier management
+- Warehouse management
+
+### 📦 Product Management
+
+- Product management
+- Product variant management
+- Product activation/deactivation
+- Product image upload
+- Variant image upload
+- Product SKU and barcode management
+- Product pricing management
+- Minimum and maximum stock configuration
+- Direct product creation for Admin and Super Admin
+
+### 📊 Inventory & Stock Management
+
+- Warehouse stock management
+- Stock-in
+- Stock-out
+- Stock transfer
+- Stock adjustment
+- Product and variant stock tracking
+- Stock quantity management
+
+### ✅ Approval Workflow
+
+Supports approval workflows for:
+
+- Product creation
+- Product updates
+- Variant creation
+- Variant updates
+- Stock-in
+- Stock-out
+- Stock transfer
+- Stock adjustment
+
+The workflow supports configurable certification and approval steps.
+
+### 📥📤 Excel Import & Export
+
+- Product Excel import
+- Product Excel export
+- Request Excel templates
+- Product creation through Excel
+- Product update through Excel
+- Variant creation through Excel
+- Variant update through Excel
+- Stock-in through Excel
+- Stock-out through Excel
+- Stock transfer through Excel
+- Stock adjustment through Excel
+
+### 🔔 Notifications & Mail
+
+- Email functionality
+- Notification functionality
+- Workflow-related notifications
+
+### 📈 Reports
+
+- Stock reports
+- Sales reports
+- Profit reports
+- Inventory reports
+
+### 🔎 Pagination & Search
+
+List APIs support standardized:
+
+- Pagination
+- Search
+- Page size
+- Total records
+- Total pages
+- Next/previous page information
+
+---
+
+## 🛠️ Tech Stack
+
+| Technology | Purpose              |
+| ---------- | -------------------- |
+| NestJS     | Backend framework    |
+| TypeScript | Programming language |
+| PostgreSQL | Database             |
+| TypeORM    | ORM                  |
+| JWT        | Authentication       |
+| RBAC       | Authorization        |
+| Cloudinary | Image storage        |
+| Excel      | Import / Export      |
+| Docker     | Containerization     |
+
+---
+
+## 📋 API Documentation
+
+Complete API documentation is available here:
+
+**[📖 API Documentation](./API_DOCUMENTATION.md)**
+
+The API documentation includes:
+
+- Authentication
+- Authorization and RBAC
+- Pagination
+- Users
+- Roles
+- Permissions
+- Menus
+- Brands
+- Categories
+- Suppliers
+- Warehouses
+- Products
+- Product variants
+- Stock management
+- Approval workflows
+- Excel import/export
+- Notifications
+- Reports
+- Request/response examples
+- Postman collection
+
+---
+
+## 📮 Postman
+
+A pre-configured Postman collection is included in the project:
+
+```text
+postman_collection.json
 ```
 
-## Compile and run the project
+The collection contains configured API requests and automatic authentication token handling.
+
+### Import Collection
+
+1. Open Postman
+2. Select **Import**
+3. Select `postman_collection.json`
+4. Import the collection
+5. Configure the required environment/collection variables
+6. Run the login request first
+7. Use the protected endpoints
+
+---
+
+## ⚙️ Installation
+
+Clone the repository:
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+git clone https://github.com/Vynn82/stock-management-api.git
 ```
 
-## Run tests
+Navigate to the project:
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+cd stock-management-api
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+Install dependencies:
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+npm install
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+---
 
-## Resources
+## 🔧 Environment Configuration
 
-Check out a few resources that may come in handy when working with NestJS:
+Create a `.env` file in the project root and configure the required environment variables.
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+Example:
 
-## Support
+```env
+PORT=3000
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+DATABASE_HOST=localhost
+DATABASE_PORT=5432
+DATABASE_USERNAME=postgres
+DATABASE_PASSWORD=your_password
+DATABASE_NAME=stock_management
 
-## Stay in touch
+JWT_ACCESS_SECRET=your_access_secret
+JWT_REFRESH_SECRET=your_refresh_secret
+```
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+> Use your project's actual environment variable configuration when setting up the application.
 
-## License
+---
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+## ▶️ Running the Application
+
+### Development
+
+```bash
+npm run start
+```
+
+### Watch Mode
+
+```bash
+npm run start:dev
+```
+
+### Production
+
+```bash
+npm run start:prod
+```
+
+The API will be available at:
+
+```text
+http://localhost:3000
+```
+
+---
+
+## 🧪 Testing
+
+Run unit tests:
+
+```bash
+npm run test
+```
+
+Run end-to-end tests:
+
+```bash
+npm run test:e2e
+```
+
+Run test coverage:
+
+```bash
+npm run test:cov
+```
+
+---
+
+## 📁 Project Structure
+
+```text
+stock-management-api/
+├── src/
+│   ├── auth/
+│   ├── users/
+│   ├── roles/
+│   ├── permissions/
+│   ├── menu/
+│   ├── brands/
+│   ├── categories/
+│   ├── suppliers/
+│   ├── warehouses/
+│   ├── products/
+│   ├── product-variants/
+│   ├── requests/
+│   ├── stock/
+│   ├── reports/
+│   ├── mails/
+│   └── common/
+│
+├── postman_collection.json
+├── API_DOCUMENTATION.md
+├── package.json
+└── README.md
+```
+
+---
+
+## 🔑 Authentication Example
+
+### Login
+
+```http
+POST /auth/login
+```
+
+Example request:
+
+```json
+{
+  "staffId": "KH00001",
+  "password": "Password123!"
+}
+```
+
+The login response provides:
+
+- Access token
+- Refresh token
+- User information
+- Roles
+- Permissions
+- Available menus
+
+---
+
+## 📦 Product Example
+
+The system supports direct product creation for authorized administrators.
+
+```http
+POST /products
+```
+
+Product creation supports:
+
+- Product information
+- Product variants
+- Initial warehouse stock
+- Product image
+- Variant images
+- Product pricing
+- SKU
+- Barcode
+
+---
+
+## 🔄 Stock Workflow
+
+The system supports the following stock operations:
+
+```text
+Stock Request
+     │
+     ▼
+Certification
+     │
+     ▼
+Approval
+     │
+     ▼
+Execution
+     │
+     ▼
+Inventory Updated
+```
+
+Supported operations:
+
+```text
+PRODUCT_CREATE
+PRODUCT_UPDATE
+VARIANT_CREATE
+VARIANT_UPDATE
+STOCK_IN
+STOCK_OUT
+STOCK_TRANSFER
+STOCK_ADJUSTMENT
+```
+
+---
+
+## 📄 License
+
+This project is for the Stock Management System application.
+
+---
+
+## 📚 Documentation
+
+For complete endpoint specifications, request/response schemas, permissions, workflows, Excel formats, and examples:
+
+**[📖 Read the Complete API Documentation](./API_DOCUMENTATION.md)**
