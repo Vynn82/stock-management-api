@@ -425,11 +425,12 @@ export class ReportsService {
   }
 
   /**
-   * Manually triggers the Daily Report to Telegram.
+   * Manually triggers the Daily Report to Telegram (text summary + PDF document).
    */
   async triggerDailyReportManual(): Promise<{
     sent: boolean;
     message: string;
+    pdfSent?: boolean;
     report: SalesReport;
   }> {
     const report = await this.generateSalesReport('DAILY');
@@ -441,11 +442,12 @@ export class ReportsService {
   }
 
   /**
-   * Manually triggers the Weekly Report to Telegram.
+   * Manually triggers the Weekly Report to Telegram (text summary + PDF document).
    */
   async triggerWeeklyReportManual(): Promise<{
     sent: boolean;
     message: string;
+    pdfSent?: boolean;
     report: SalesReport;
   }> {
     const report = await this.generateSalesReport('WEEKLY');

@@ -1,12 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SalesReport } from './interfaces/report.interface';
+import { SalesReportPdfService } from './pdf/sales-report-pdf.service';
 
 @Injectable()
 export class TelegramService {
   private readonly logger = new Logger(TelegramService.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly pdfService: SalesReportPdfService,
+  ) {}
 
   private getCredentials(): { botToken: string; chatId: string } {
     const rawToken = this.configService.get<string>('TELEGRAM_BOT_TOKEN') || '';
@@ -215,11 +219,12 @@ export class TelegramService {
   }
 
   /**
-   * Sends the sales report to Telegram chat.
+   * Sends the sales report summary to Telegram chat, then generates and sends
+   * the high-resolution corporate PDF report.
    */
   async sendReport(
     report: SalesReport,
-  ): Promise<{ sent: boolean; message: string }> {
+  ): Promise<{ sent: boolean; message: string; pdfSent?: boolean }> {
     const { botToken, chatId } = this.getCredentials();
 
     if (!botToken || !chatId) {
@@ -233,11 +238,14 @@ export class TelegramService {
       };
     }
 
+    // --- STEP 1: Send Telegram Summary Message ---
+    let textSent = false;
+    let textMessage = '';
     const text = this.formatReportHtml(report);
-    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+    const textUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
 
     try {
-      const response = await fetch(url, {
+      const response = await fetch(textUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -254,7 +262,106 @@ export class TelegramService {
 
       if (!response.ok || !data.ok) {
         this.logger.error(
-          `Failed to send Telegram message: ${JSON.stringify(data)}`,
+          `Failed to send Telegram message: ${data?.description || response.statusText}`,
+        );
+        textSent = false;
+        textMessage = `Telegram API error: ${data?.description || response.statusText}`;
+      } else {
+        this.logger.log(
+          `Successfully delivered ${report.period} summary to Telegram chat ${chatId}`,
+        );
+        textSent = true;
+        textMessage = `Successfully delivered ${report.period} report to Telegram.`;
+      }
+    } catch (error: any) {
+      this.logger.error(
+        `Error sending Telegram alert: ${error.message}`,
+        error.stack,
+      );
+      textSent = false;
+      textMessage = `Network error sending to Telegram: ${error.message}`;
+    }
+
+    // --- STEP 2: Generate & Send Corporate PDF Report ---
+    let pdfSent = false;
+    try {
+      this.logger.log(
+        `Generating corporate PDF report for ${report.period} period...`,
+      );
+      const pdfBuffer = await this.pdfService.generateReportPdf(report);
+
+      const d = new Date(report.endDate);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+      const periodLabel = report.period === 'WEEKLY' ? 'Weekly' : 'Daily';
+      const filename = `${periodLabel} Report ${dateStr}.pdf`;
+
+      const docResult = await this.sendDocument(
+        pdfBuffer,
+        filename,
+        filename,
+      );
+      pdfSent = docResult.sent;
+    } catch (pdfError: any) {
+      this.logger.error(
+        `Error generating or sending PDF report: ${pdfError.message}`,
+        pdfError.stack,
+      );
+    }
+
+    return {
+      sent: textSent,
+      message: textMessage,
+      pdfSent,
+    };
+  }
+
+  /**
+   * Sends a document (such as a PDF report) to Telegram chat using multipart/form-data.
+   */
+  async sendDocument(
+    documentBuffer: Buffer,
+    filename: string,
+    caption?: string,
+  ): Promise<{ sent: boolean; message: string }> {
+    const { botToken, chatId } = this.getCredentials();
+
+    if (!botToken || !chatId) {
+      this.logger.warn('Cannot send document: Telegram credentials are not configured.');
+      return {
+        sent: false,
+        message: 'Telegram credentials are empty or not configured.',
+      };
+    }
+
+    const url = `https://api.telegram.org/bot${botToken}/sendDocument`;
+
+    try {
+      const formData = new FormData();
+      formData.append('chat_id', chatId);
+      formData.append(
+        'document',
+        new Blob([new Uint8Array(documentBuffer)], {
+          type: 'application/pdf',
+        }),
+        filename,
+      );
+      if (caption) {
+        formData.append('caption', caption);
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = (await response.json()) as any;
+
+      if (!response.ok || !data.ok) {
+        this.logger.error(
+          `Failed to send Telegram document [${filename}]: ${data?.description || response.statusText}`,
         );
         return {
           sent: false,
@@ -263,20 +370,20 @@ export class TelegramService {
       }
 
       this.logger.log(
-        `Successfully delivered ${report.period} report to Telegram chat ${chatId}`,
+        `Successfully delivered PDF [${filename}] to Telegram chat ${chatId}`,
       );
       return {
         sent: true,
-        message: `Successfully delivered ${report.period} report to Telegram.`,
+        message: `Successfully delivered ${filename} to Telegram.`,
       };
     } catch (error: any) {
       this.logger.error(
-        `Error sending Telegram alert: ${error.message}`,
+        `Error sending document to Telegram: ${error.message}`,
         error.stack,
       );
       return {
         sent: false,
-        message: `Network error sending to Telegram: ${error.message}`,
+        message: `Network error sending document to Telegram: ${error.message}`,
       };
     }
   }

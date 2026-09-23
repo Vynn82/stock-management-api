@@ -166,3 +166,61 @@ const permissions = [
 PS D:\Coding_D\stock-management-api> npx typeorm-ts-node-commonjs migration:create src/database/migrations/CreateRoleMenus
 Migration D:\Coding_D\stock-management-api\src\database\migrations/1788069232181-CreateRoleMenus.ts has been generated successfully.
 PS D:\Coding_D\stock-management-api> npx typeorm-ts-node-commonjs migration:run -d src/database/data-source.ts
+
+
+
+
+
+
+  /**
+   * Get sales, spending, profit, and stock summary data as JSON.
+   */
+  @Get('summary')
+  async getSummary(
+    @Query('period') period?: 'daily' | 'weekly',
+  ): Promise<SalesReport> {
+    const p = period?.toUpperCase() === 'WEEKLY' ? 'WEEKLY' : 'DAILY';
+    return this.reportsService.generateSalesReport(p);
+  }
+
+  /**
+   * Preview the HTML UI generated for Telegram.
+   */
+  @Get('preview')
+  async getTelegramPreview(
+    @Query('period') period?: 'daily' | 'weekly',
+  ): Promise<{ period: string; html: string }> {
+    const p = period?.toUpperCase() === 'WEEKLY' ? 'WEEKLY' : 'DAILY';
+    const report = await this.reportsService.generateSalesReport(p);
+    const html = this.telegramService.formatReportHtml(report);
+    return {
+      period: p,
+      html,
+    };
+  }
+
+  /**
+   * Preview and download the generated corporate PDF report directly in browser.
+   */
+  @Get('pdf')
+  async getPdf(
+    @Query('period') period: 'daily' | 'weekly',
+    @Res() res: Response,
+  ) {
+    const p = period?.toUpperCase() === 'WEEKLY' ? 'WEEKLY' : 'DAILY';
+    const report = await this.reportsService.generateSalesReport(p);
+    const pdfBuffer = await this.pdfService.generateReportPdf(report);
+
+    const d = new Date(report.endDate);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const filename = `${p.toLowerCase()}-sales-inventory-report-${year}-${month}-${day}.pdf`;
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="${filename}"`,
+      'Content-Length': pdfBuffer.length.toString(),
+    });
+    res.end(pdfBuffer);
+  }

@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ReportsService } from './reports.service';
 import { ReportsController } from './reports.controller';
 import { TelegramService } from './telegram.service';
+import { SalesReportPdfService } from './pdf/sales-report-pdf.service';
 
 import { Request } from '../requests/entities/request.entity';
 import { RequestItem } from '../requests/entities/request-item.entity';
@@ -24,7 +25,7 @@ import { StockAdjustment } from '../stock-adjustments/entities/stock-adjustment.
     ]),
   ],
   controllers: [ReportsController],
-  providers: [ReportsService, TelegramService],
-  exports: [ReportsService, TelegramService],
+  providers: [ReportsService, TelegramService, SalesReportPdfService],
+  exports: [ReportsService, TelegramService, SalesReportPdfService],
 })
 export class ReportsModule {}
