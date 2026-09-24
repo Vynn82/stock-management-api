@@ -1363,6 +1363,9 @@ Direct stock adjustment allows **`ADMIN`** and **`SUPER_ADMIN`** to adjust physi
 
 **Single Item Payload Example**:
 
+> [!TIP]
+> `productCode` and `variantCode` accept **Raw Scanned Barcodes** (e.g. `2008491028371`), **SKUs**, **Product Codes**, or **UUIDs**, allowing direct integration with scanner hardware.
+
 ```json
 {
   "productCode": "IMP-PROD-49496",
