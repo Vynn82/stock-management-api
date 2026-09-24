@@ -21,6 +21,7 @@ import { MailsModule } from './mails/mails.module';
 import { StockModule } from './stock/stock.module';
 import { StockAdjustmentsModule } from './stock-adjustments/stock-adjustments.module';
 import { ReportsModule } from './reports/reports.module';
+import { BarcodesModule } from './barcodes/barcodes.module';
 
 @Module({
   imports: [
@@ -89,6 +90,8 @@ import { ReportsModule } from './reports/reports.module';
     StockAdjustmentsModule,
 
     ReportsModule,
+
+    BarcodesModule,
   ],
 })
 export class AppModule {}

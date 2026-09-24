@@ -7,10 +7,15 @@ import { Product } from '../products/entities/product.entity';
 import { ProductVariantsController } from './product-variants.controller';
 import { ProductVariantsService } from './product-variants.service';
 
+import { BarcodesModule } from '../barcodes/barcodes.module';
+
 @Module({
-  imports: [TypeOrmModule.forFeature([ProductVariant, Product])],
+  imports: [
+    TypeOrmModule.forFeature([ProductVariant, Product]),
+    BarcodesModule,
+  ],
   controllers: [ProductVariantsController],
   providers: [ProductVariantsService],
-  exports: [TypeOrmModule],
+  exports: [ProductVariantsService, TypeOrmModule],
 })
 export class ProductVariantsModule {}

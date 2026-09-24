@@ -87,35 +87,63 @@ export class StockAdjustmentsService {
         const item = items[i];
         const rowLabel = `Item ${i + 1} (${item.productCode || 'unknown'})`;
 
-        // 1. Validate Product
+        // 1. Validate Product (matches code, barcode, SKU, or UUID)
         if (!item.productCode?.trim()) {
           throw new BadRequestException(`${rowLabel}: productCode is required`);
         }
 
+        const productVal = item.productCode.trim();
+        const isProductUuid =
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            productVal,
+          );
+        const productWhere: any[] = [
+          { code: productVal, isActive: true },
+          { barcode: productVal, isActive: true },
+          { sku: productVal, isActive: true },
+        ];
+        if (isProductUuid) {
+          productWhere.unshift({ id: productVal, isActive: true });
+        }
+
         const product = await manager.findOne(Product, {
-          where: { code: item.productCode.trim(), isActive: true },
+          where: productWhere,
         });
 
         if (!product) {
           throw new NotFoundException(
-            `${rowLabel}: Product with code "${item.productCode}" not found or inactive`,
+            `${rowLabel}: Product with code, barcode, SKU or ID "${item.productCode}" not found or inactive`,
           );
         }
 
-        // 2. Validate Variant (if specified)
+        // 2. Validate Variant (if specified - matches code, barcode, SKU, or UUID)
         let variant: ProductVariant | null = null;
         if (item.variantCode?.trim()) {
-          variant = await manager.findOne(ProductVariant, {
-            where: {
-              code: item.variantCode.trim(),
+          const variantVal = item.variantCode.trim();
+          const isVariantUuid =
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+              variantVal,
+            );
+          const variantWhere: any[] = [
+            { code: variantVal, productId: product.id, isActive: true },
+            { barcode: variantVal, productId: product.id, isActive: true },
+            { sku: variantVal, productId: product.id, isActive: true },
+          ];
+          if (isVariantUuid) {
+            variantWhere.unshift({
+              id: variantVal,
               productId: product.id,
               isActive: true,
-            },
+            });
+          }
+
+          variant = await manager.findOne(ProductVariant, {
+            where: variantWhere,
           });
 
           if (!variant) {
             throw new NotFoundException(
-              `${rowLabel}: Variant with code "${item.variantCode}" not found or inactive for product "${product.code}"`,
+              `${rowLabel}: Variant with code, barcode, SKU or ID "${item.variantCode}" not found or inactive for product "${product.code}"`,
             );
           }
         }

@@ -10,6 +10,7 @@ import { Repository } from 'typeorm';
 
 import { ProductVariant } from './entities/product-variant.entity';
 import { Product } from '../products/entities/product.entity';
+import { BarcodesService } from '../barcodes/barcodes.service';
 
 import { CreateProductVariantDto } from './dto/create-product-variant.dto';
 import { UpdateProductVariantDto } from './dto/update-product-variant.dto';
@@ -27,6 +28,8 @@ export class ProductVariantsService {
 
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
+
+    private readonly barcodesService: BarcodesService,
   ) {}
 
   // =====================================================
@@ -71,10 +74,13 @@ export class ProductVariantsService {
       throw new ConflictException('Variant code already exists');
     }
 
-    if (dto.barcode) {
+    let barcode = dto.barcode;
+    if (!barcode || (typeof barcode === 'string' && !barcode.trim())) {
+      barcode = await this.barcodesService.generateUniqueBarcode();
+    } else {
       const existingBarcode = await this.variantRepository.findOne({
         where: {
-          barcode: dto.barcode,
+          barcode,
         },
       });
 
@@ -87,7 +93,7 @@ export class ProductVariantsService {
       ...dto,
       code,
       sku: dto.sku.toUpperCase(),
-      barcode: dto.barcode ?? null,
+      barcode: barcode ?? null,
       attributes: dto.attributes ?? null,
       costPrice: dto.costPrice ?? null,
       sellingPrice: dto.sellingPrice ?? null,

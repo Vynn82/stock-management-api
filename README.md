@@ -50,6 +50,13 @@ The system provides authentication, user and role management, product management
 - Product pricing management
 - Minimum and maximum stock configuration
 - Direct product creation for Admin and Super Admin
+- **Automatic EAN-13 Barcode Generation** (automatic 13-digit Mod-10 checksum barcode creation when omitted on product/variant creation)
+- **Real-Time Dynamic QR Synchronization** (instantly synced with live product prices, attributes, and stock)
+- **1D Barcode Streaming** (Code128, EAN-13, Code39 in PNG/SVG via UUID or Code)
+- **2D QR Code Streaming** (PNG/SVG with structured product metadata)
+- **Barcode & QR Scanner Lookup** (instant product/variant, warehouse inventory & Base64 preview resolution)
+- **Printable Thermal PDF Labels** (ready-to-print 55mm × 35mm sticker sheets with barcode, QR, SKU, and price)
+
 
 ### 📊 Inventory & Stock Management
 
@@ -127,6 +134,8 @@ List APIs support standardized:
 | JWT        | Authentication       |
 | RBAC       | Authorization        |
 | Cloudinary | Image storage        |
+| bwip-js / QRCode | 1D & 2D Barcode Engine |
+| PDFKit     | Corporate PDF & Label Generator |
 | Excel      | Import / Export      |
 | Docker     | Containerization     |
 
@@ -158,6 +167,7 @@ The API documentation includes:
 - Excel import/export
 - Notifications
 - Reports
+- **Barcodes, QR codes & printable labels**
 - Request/response examples
 - Postman collection
 
@@ -296,8 +306,10 @@ stock-management-api/
 │   ├── warehouses/
 │   ├── products/
 │   ├── product-variants/
+│   ├── barcodes/
 │   ├── requests/
 │   ├── stock/
+│   ├── stock-adjustments/
 │   ├── reports/
 │   ├── mails/
 │   └── common/
@@ -356,6 +368,24 @@ Product creation supports:
 - Product pricing
 - SKU
 - Barcode
+
+---
+
+## 🏷️ Barcodes & QR Scanner Example
+
+### Fast Scanner / Lookup
+
+Scan any 1D barcode, QR code, SKU, or Product Code to resolve entity info, multi-warehouse inventory, and Base64 previews:
+
+```http
+GET /barcodes/lookup/8851234567890
+```
+
+### Visual Barcode & QR Streaming
+
+- **1D Barcode (PNG/SVG)**: `GET /products/:id/barcode?format=png&scale=3&height=10`
+- **2D QR Code (PNG/SVG)**: `GET /products/:id/qrcode?format=png&width=300`
+- **Printable Thermal Sticker Label (PDF)**: `GET /products/:id/label?copies=1&includePrice=true`
 
 ---
 

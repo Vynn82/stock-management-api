@@ -3989,6 +3989,32 @@
           "response": []
         },
         {
+          "name": "Download / Stream Corporate PDF Report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reports/pdf?period=daily",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "pdf"
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "daily",
+                  "description": "daily or weekly"
+                }
+              ]
+            },
+            "description": "Generates and downloads branded Corporate PDF report with sales, inventory value, damage loss, and low stock warnings."
+          },
+          "response": []
+        },
+        {
           "name": "Trigger Weekly Telegram Report Manually",
           "request": {
             "method": "POST",
@@ -4013,6 +4039,205 @@
               "query": []
             },
             "description": "Immediately runs and sends the Weekly Summary Report to Telegram."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "16. Barcodes, QR Codes & Printable Labels (/barcodes)",
+      "description": "1D Barcode (Code128, EAN13) and 2D QR Code generation, scanner resolution lookup, and printable thermal sticker PDF labels.",
+      "item": [
+        {
+          "name": "Scanner / Lookup by Barcode or SKU",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/barcodes/lookup/8851234567890",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "barcodes",
+                "lookup",
+                "8851234567890"
+              ],
+              "query": []
+            },
+            "description": "Resolves any scanned barcode, SKU, or product/variant code. Returns complete product data, multi-warehouse stock balances, and Base64 preview images."
+          },
+          "response": []
+        },
+        {
+          "name": "Stream Product 1D Barcode",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}/barcode?format=png",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "{{productId}}",
+                "barcode"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "png"
+                }
+              ]
+            },
+            "description": "Streams 1D Code128 barcode image for a specific product."
+          },
+          "response": []
+        },
+        {
+          "name": "Stream Product 2D QR Code",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}/qrcode?format=png&width=300",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "{{productId}}",
+                "qrcode"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "png"
+                },
+                {
+                  "key": "width",
+                  "value": "300"
+                }
+              ]
+            },
+            "description": "Streams 2D QR code image encoding product metadata."
+          },
+          "response": []
+        },
+        {
+          "name": "Print / Download Product Thermal Sticker Label (PDF)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}/label?copies=1&includePrice=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "{{productId}}",
+                "label"
+              ],
+              "query": [
+                {
+                  "key": "copies",
+                  "value": "1"
+                },
+                {
+                  "key": "includePrice",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Generates 55mm x 35mm thermal sticker PDF label for direct printer output."
+          },
+          "response": []
+        },
+        {
+          "name": "Stream Variant 1D Barcode",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/product-variants/{{variantId}}/barcode?format=png",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "product-variants",
+                "{{variantId}}",
+                "barcode"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "png"
+                }
+              ]
+            },
+            "description": "Streams 1D Code128 barcode image for a product variant."
+          },
+          "response": []
+        },
+        {
+          "name": "Stream Variant 2D QR Code",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/product-variants/{{variantId}}/qrcode?format=png&width=300",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "product-variants",
+                "{{variantId}}",
+                "qrcode"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "png"
+                },
+                {
+                  "key": "width",
+                  "value": "300"
+                }
+              ]
+            },
+            "description": "Streams 2D QR code image for a product variant."
+          },
+          "response": []
+        },
+        {
+          "name": "Print / Download Variant Thermal Sticker Label (PDF)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/product-variants/{{variantId}}/label?copies=1&includePrice=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "product-variants",
+                "{{variantId}}",
+                "label"
+              ],
+              "query": [
+                {
+                  "key": "copies",
+                  "value": "1"
+                },
+                {
+                  "key": "includePrice",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Generates 55mm x 35mm thermal sticker PDF label for a product variant."
           },
           "response": []
         }

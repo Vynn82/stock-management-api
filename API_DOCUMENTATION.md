@@ -29,6 +29,7 @@ A comprehensive guide and reference for all endpoints, authentication rules, glo
 16. [Mails & Notifications API (`/mails`)](#16-mails--notifications-api-mails)
 17. [Direct Stock & Adjustments API (`/stock`, `/stock-adjustments`)](#17-direct-stock--adjustments-api)
 18. [Sales, Profit & Inventory Reports API (`/reports`)](#18-sales-profit--inventory-reports-api)
+19. [Barcodes, QR Codes & Printable Labels API (`/barcodes`, `/products`, `/product-variants`)](#19-barcodes-qr-codes--printable-labels-api)
 
 ---
 
@@ -47,9 +48,9 @@ Content-Type: application/json
 
 ### 📮 Postman Collection
 
-A ready-to-import Postman Collection v2.1.0 is available at [`postman_collection.json`](file:///d:/Coding_D/stock-management-api/postman_collection.json) in the project root:
+A ready-to-import Postman Collection v2.1.0 is available at [`postman_collection.json`](file:///d:/ACLEDA/Y4-S1/Project%20Management/stock-management-api/postman_collection.json) in the project root:
 
-- **99 pre-configured requests** categorized across 15 folders matching this documentation.
+- **110 pre-configured requests** categorized across 16 folders matching this documentation.
 - Built-in `{{baseUrl}}` variable pointing to `http://localhost:3000`.
 - **Automatic Token Handling**: Running `POST /auth/login` automatically extracts `accessToken` and `refreshToken` and saves them to collection variables.
 - All subsequent protected requests inherit the Bearer token automatically.
@@ -1531,3 +1532,113 @@ _(Note: If left empty with double quotes, cron jobs will log a warning and skip 
   "html": "📊 <b>DAILY SALES & INVENTORY REPORT</b>\n📅 <i>Sep 20, 2026 | 05:00 PM</i>\n━━━━━━━━━━━━━━━━━━━━\n\n💰 <b>FINANCIAL PERFORMANCE</b>\n├ 💵 <b>Total Revenue:</b> $17,482.00\n├ 🏷️ <b>Total Cost of Goods Sold:</b> $13,560.00\n├ 📈 <b>Net Profit:</b> <b>+$3,922.00</b>\n├ 🎯 <b>Profit Margin:</b> <b>22.4%</b>\n├ ⚠️ <b>Damage / Loss Value:</b> -$780.00\n\n📦 <b>SALES (STOCK OUT)</b>\n├ <b>Units Sold:</b> 18 items\n├ <b>Approved Requests:</b> 4\n└ <b>Product Highlights:</b>\n  ▫️ <b>[IPHONE-15] Apple iPhone 15</b> (128GB Black)\n     Sold: <b>10</b> | Cost: $700.00 | Sell: $899.00\n     Profit: <b>+$1,990.00</b> (Margin: 22.1%)\n  ▫️ <b>[MBP16-M3] MacBook Pro 16&quot; M3 Max</b> (1TB Silver)\n     Sold: <b>2</b> | Cost: $2,800.00 | Sell: $3,499.00\n     Profit: <b>+$1,398.00</b> (Margin: 20.0%)\n\n📥 <b>INCOMING INVENTORY (STOCK IN)</b>\n├ <b>Units Received:</b> 45 items (2 batches)\n├ <b>Restock Value:</b> $18,250.00\n└ <b>Restocked Items:</b>\n  ▫️ <b>[IPHONE-15] Apple iPhone 15</b> (128GB Black)\n     Restocked: <b>+25</b> units | Cost: $17,500.00\n\n⚖️ <b>STOCK ADJUSTMENTS & AUDIT</b>\n├ <b>Total Adjustments:</b> 3\n├ <b>Net Quantity:</b> -4 units\n├ 🔻 <b>Total Loss/Decrease:</b> -6 units (-$780.00)\n├ 🔺 <b>Total Surplus/Increase:</b> +2 units (+$140.00)\n└ <b>Breakdown by Reason:</b>\n  🔻 <b>Broken / Damaged</b> (DECREASE):\n     Qty: <b>-4</b> | Impact: <b>-$480.00</b>\n     ▫️ iPhone 15 Clear Case with MagSafe: -3 units\n     ▫️ Apple 100W USB-C Power Adapter: -1 units\n  🔻 <b>Expired / Obsolete</b> (DECREASE):\n     Qty: <b>-2</b> | Impact: <b>-$300.00</b>\n     ▫️ MagSafe Battery Pack: -2 units\n  🔺 <b>Physical Audit Surplus</b> (INCREASE):\n     Qty: <b>+2</b> | Impact: <b>+$140.00</b>\n     ▫️ USB-C Charge Cable (2m): +2 units\n\n🏢 <b>INVENTORY HEALTH</b>\n├ 📦 <b>Total Stock on Hand:</b> 485 units\n└ ⚠️ <b>Low Stock Alerts (2):</b>\n  ▫️ <b>iPhone 15 Clear Case with MagSafe</b>\n     Current: <b>3</b> | Min Required: <b>10</b>\n  ▫️ <b>Apple 100W USB-C Power Adapter</b>\n     Current: <b>1</b> | Min Required: <b>5</b>\n\n━━━━━━━━━━━━━━━━━━━━\n🤖 <i>Automated Notification • Stock Management System</i>"
 }
 ```
+
+---
+
+## 19. Barcodes, QR Codes & Printable Labels API
+
+Comprehensive barcode generation (1D Code128, EAN-13, Code39), 2D QR code generation, instant scanner resolution lookup, and printable thermal sticker PDF labels for products and variants.
+
+### 19.1 Fast Scanner Resolution / Lookup
+
+Resolves any scanned barcode, SKU, product code, or variant code. Returns full product/variant data, category/brand metadata, live multi-warehouse stock balances, and embedded Base64 barcode/QR previews.
+
+- **Endpoint**: `GET /barcodes/lookup/:code` (or `GET /products/lookup/barcode/:code`)
+- **Access**: Authenticated
+
+#### Example Request:
+```http
+GET /barcodes/lookup/8851234567890
+```
+
+#### Response (`200 OK`):
+```json
+{
+  "matchType": "PRODUCT",
+  "product": {
+    "id": "0f89d6c8-8bc4-4592-9cba-25d57bfb112b",
+    "code": "IPHONE-16-PRO",
+    "name": "Apple iPhone 16 Pro",
+    "category": "Smartphones",
+    "brand": "Apple",
+    "supplier": "Apple Official Supply",
+    "unit": "Piece",
+    "sku": "IP16P-SKU-001",
+    "barcode": "8851234567890",
+    "costPrice": 850.00,
+    "sellingPrice": 1099.00,
+    "minimumStock": 10,
+    "maximumStock": 100,
+    "hasVariants": true,
+    "image": "https://res.cloudinary.com/.../image.jpg",
+    "isActive": true
+  },
+  "variantsCount": 3,
+  "inventory": {
+    "totalStock": 45,
+    "warehouses": [
+      {
+        "warehouseId": "a57bb815-bbf0-42cf-bb52-f6733230c1be",
+        "warehouseCode": "WH-MAIN",
+        "warehouseName": "Phnom Penh Central Warehouse",
+        "variantId": null,
+        "quantity": 45
+      }
+    ]
+  },
+  "barcodes": {
+    "barcodeValue": "8851234567890",
+    "barcodePng": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg...",
+    "qrPng": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg..."
+  }
+}
+```
+
+---
+
+### 19.2 Product-Specific Barcodes & QR Codes
+
+> [!NOTE]
+> `:id` can be either the Product UUID (e.g. `00e60628-471c-489d-b1d4-6107555228be`) or the unique Product Code (e.g. `IPHONE-16-PRO`), SKU, or Barcode.
+
+| Method | Endpoint | Query Options | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/products/:id/barcode` | `?format=png\|svg&scale=3&height=10` | Stream 1D barcode image for product |
+| `GET` | `/products/:id/qrcode` | `?format=png\|svg&width=300` | Stream 2D QR code image for product |
+| `GET` | `/products/:id/label` | `?copies=1&includePrice=true` | Stream printable thermal sticker PDF label |
+
+---
+
+### 19.3 Product Variant-Specific Barcodes & QR Codes
+
+> [!NOTE]
+> `:id` can be either the Variant UUID, Variant Code (e.g. `IP16P-256-BLK`), SKU, or Barcode.
+
+| Method | Endpoint | Query Options | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/product-variants/:id/barcode` | `?format=png\|svg&scale=3&height=10` | Stream 1D barcode image for variant |
+| `GET` | `/product-variants/:id/qrcode` | `?format=png\|svg&width=300` | Stream 2D QR code image for variant |
+| `GET` | `/product-variants/:id/label` | `?copies=1&includePrice=true` | Stream printable thermal sticker PDF label |
+
+---
+
+### 19.4 Printable Thermal PDF Labels
+
+- **Dimensions**: Standard 55mm × 35mm thermal barcode sticker (160 × 100 pt).
+- **Layout**:
+  - Top: Brand & Category badge.
+  - Header: Product / Variant Name.
+  - Left: Crisp 1D Code128 barcode with human-readable text.
+  - Right: High-density 2D QR code.
+  - Bottom Banner: SKU, Attributes/Unit, and bold Selling Price in Green.
+- **Multiple Copies**: Pass `?copies=5` to generate a 5-page print job ready for direct thermal label printers.
+
+---
+
+### 19.5 Automatic Barcode Generation & Real-time QR Synchronization
+
+1. **Auto-Generated Barcode Numbers**:
+   - When creating a product or variant (via direct API creation, multipart upload, Excel batch import, or approved Maker-Checker workflow), if the `barcode` property is empty or omitted, the system automatically assigns a unique, standard 13-digit EAN-13 barcode number with Modulo-10 checksum algorithm (Prefix `200...`).
+2. **Real-time Dynamic QR Synchronization**:
+   - QR codes and barcodes are computed on-demand from the product / variant database state. Whenever product details, prices, or attributes are updated, all barcode/QR streams and printable labels immediately render the updated state without needing storage migration or batch re-generation.
+

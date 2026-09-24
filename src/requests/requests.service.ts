@@ -48,6 +48,10 @@ import {
   getPaginationOptions,
 } from '../common/pagination';
 
+import { RequestsExcelService } from './requests-excel.service';
+import { RequestImportTemplateService } from './request-import-template.service';
+import { BarcodesService } from '../barcodes/barcodes.service';
+
 @Injectable()
 export class RequestsService {
   constructor(
@@ -57,7 +61,32 @@ export class RequestsService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly mailService: MailsService,
+    private readonly requestsExcelService: RequestsExcelService,
+    private readonly requestImportTemplateService: RequestImportTemplateService,
+    private readonly barcodesService: BarcodesService,
   ) {}
+
+  generateTemplate(requestType: RequestType) {
+    return this.requestImportTemplateService.generateTemplate(requestType);
+  }
+
+  async importFromExcel(
+    file: Express.Multer.File,
+    requestType: RequestType,
+    approversRaw: any,
+    userId: string,
+  ) {
+    const dto = this.requestsExcelService.importExcel(file, requestType);
+    if (approversRaw) {
+      try {
+        dto.approvers =
+          typeof approversRaw === 'string'
+            ? JSON.parse(approversRaw)
+            : approversRaw;
+      } catch {}
+    }
+    return this.create(dto, userId, RequestSource.EXCEL);
+  }
 
   async findAll(userId: string, paginationDto?: PaginationDto) {
     const { limit, skip } = getPaginationOptions(paginationDto);
@@ -110,6 +139,56 @@ export class RequestsService {
     }
 
     return this.formatRequestResponse(request, userId);
+  }
+
+  async createFromMultipart(
+    body: any,
+    files: Express.Multer.File[],
+    userId: string,
+  ) {
+    const parseJson = (val: any) => {
+      if (typeof val === 'string') {
+        try {
+          return JSON.parse(val);
+        } catch {
+          return val;
+        }
+      }
+      return val;
+    };
+
+    const createRequestDto: CreateRequestDto = {
+      requestType: body.requestType ?? body.type,
+      product: body.product ? parseJson(body.product) : undefined,
+      variants: body.variants ? parseJson(body.variants) : undefined,
+      stock: body.stock ? parseJson(body.stock) : undefined,
+      adjustments: body.adjustments ? parseJson(body.adjustments) : undefined,
+      approvers: body.approvers ? parseJson(body.approvers) : [],
+      remark: body.remark ?? null,
+    };
+
+    let productImageUrl: string | undefined;
+    const variantImageUrls: Record<string, string> = {};
+
+    for (const file of files ?? []) {
+      if (file.fieldname === 'image') {
+        productImageUrl = file.path;
+        continue;
+      }
+
+      const match = file.fieldname.match(/^variantImage\[(.+)\]$/);
+      if (match) {
+        variantImageUrls[match[1]] = file.path;
+      }
+    }
+
+    return this.create(
+      createRequestDto,
+      userId,
+      RequestSource.MANUAL,
+      productImageUrl,
+      variantImageUrls,
+    );
   }
 
   async create(
@@ -1800,6 +1879,11 @@ export class RequestsService {
     // 6. CREATE NEW PRODUCT
     // =====================================================
 
+    let barcode = item.productBarcode;
+    if (!barcode || (typeof barcode === 'string' && !barcode.trim())) {
+      barcode = await this.barcodesService.generateUniqueBarcode();
+    }
+
     product = manager.create(Product, {
       code: item.productCode,
       name: item.productName,
@@ -1814,7 +1898,7 @@ export class RequestsService {
       unit: item.unit,
 
       sku: item.productSku,
-      barcode: item.productBarcode,
+      barcode,
 
       costPrice: item.productCostPrice ?? 0,
       sellingPrice: item.productSellingPrice ?? 0,
@@ -1876,6 +1960,11 @@ export class RequestsService {
       // CREATE NEW VARIANT
       // =====================================================
 
+      let vBarcode = item.variantBarcode;
+      if (!vBarcode || (typeof vBarcode === 'string' && !vBarcode.trim())) {
+        vBarcode = await this.barcodesService.generateUniqueBarcode();
+      }
+
       variant = manager.create(ProductVariant, {
         productId: product.id,
 
@@ -1883,7 +1972,7 @@ export class RequestsService {
         name: item.variantName ?? '',
 
         sku: item.variantSku!,
-        barcode: item.variantBarcode,
+        barcode: vBarcode,
 
         attributes: item.variantAttributes,
         image: item.variantImage,

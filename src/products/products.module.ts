@@ -11,6 +11,8 @@ import { ProductsController } from './products.controller';
 import { ProductsService } from './products.service';
 import { ProductsExcelService } from './products-excel.service';
 
+import { BarcodesModule } from '../barcodes/barcodes.module';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -22,6 +24,7 @@ import { ProductsExcelService } from './products-excel.service';
       Stock,
       Warehouse,
     ]),
+    BarcodesModule,
   ],
   controllers: [ProductsController],
   providers: [ProductsService, ProductsExcelService],
