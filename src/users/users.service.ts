@@ -152,13 +152,26 @@ export class UsersService {
     });
 
     // 9. Send welcome email
-    await this.mailService.sendWelcomeEmail(
-      email,
-      firstName,
-      lastName,
-      staffId,
-      temporaryPassword,
-    );
+    // await this.mailService.sendWelcomeEmail(
+    //   email,
+    //   firstName,
+    //   lastName,
+    //   staffId,
+    //   temporaryPassword,
+    // );
+
+    // 9. Send welcome email (don't let mail failure break user creation)
+    try {
+      await this.mailService.sendWelcomeEmail(
+        email,
+        firstName,
+        lastName,
+        staffId,
+        temporaryPassword,
+      );
+    } catch (error:any) {
+      console.error('Failed to send welcome email:', error.message);
+    }
 
     // 10. Temporary response for testing
     return {
