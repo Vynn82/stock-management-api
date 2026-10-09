@@ -4,7 +4,11 @@ import { JwtService } from '@nestjs/jwt';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import * as crypto from 'crypto';
-import { ForbiddenException, UnauthorizedException, ExecutionContext } from '@nestjs/common';
+import {
+  ForbiddenException,
+  UnauthorizedException,
+  ExecutionContext,
+} from '@nestjs/common';
 
 import {
   TelegramAuthService,
@@ -27,9 +31,13 @@ import { Stock } from '../../stock/entities/stock.entity';
 import { Warehouse } from '../../warehouses/entities/warehouse.entity';
 import { MailsService } from '../../mails/mails.service';
 
-const TEST_BOT_TOKEN = '8818101242:AAHZQk1kXxecy6FLyObRoJiwxXne-WOfZMY';
+const TEST_BOT_TOKEN = '';
 
-function createValidInitData(user: any, botToken: string = TEST_BOT_TOKEN, chatId?: string) {
+function createValidInitData(
+  user: any,
+  botToken: string = TEST_BOT_TOKEN,
+  chatId?: string,
+) {
   const params: Record<string, string> = {
     auth_date: Math.floor(Date.now() / 1000).toString(),
     query_id: 'AAHdF6IQAAAAAN0XohD9V_test',
@@ -40,8 +48,14 @@ function createValidInitData(user: any, botToken: string = TEST_BOT_TOKEN, chatI
   }
   const keys = Object.keys(params).sort();
   const dataCheckString = keys.map((k) => `${k}=${params[k]}`).join('\n');
-  const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
-  const hash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+  const secretKey = crypto
+    .createHmac('sha256', 'WebAppData')
+    .update(botToken)
+    .digest();
+  const hash = crypto
+    .createHmac('sha256', secretKey)
+    .update(dataCheckString)
+    .digest('hex');
 
   const searchParams = new URLSearchParams();
   for (const k of keys) {
@@ -65,7 +79,9 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
       findOne: jest.fn(),
       find: jest.fn(),
       create: jest.fn((entity, data) => ({ ...data })),
-      save: jest.fn((entity, data) => Promise.resolve({ id: data.id || 'gen-uuid', ...data })),
+      save: jest.fn((entity, data) =>
+        Promise.resolve({ id: data.id || 'gen-uuid', ...data }),
+      ),
     };
 
     dataSource = {
@@ -112,7 +128,10 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
         { provide: JwtService, useValue: jwtService },
         { provide: DataSource, useValue: dataSource },
         { provide: getRepositoryToken(Customer), useValue: customerRepo },
-        { provide: getRepositoryToken(CustomerTelegramAccount), useValue: accountRepo },
+        {
+          provide: getRepositoryToken(CustomerTelegramAccount),
+          useValue: accountRepo,
+        },
         { provide: TelegramBotService, useValue: telegramBotService },
       ],
     }).compile();
@@ -125,7 +144,11 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
   // -------------------------------------------------------------
   it('Case 1: New Telegram user should receive REGISTRATION_REQUIRED', async () => {
     accountRepo.findOne.mockResolvedValue(null);
-    const initData = createValidInitData({ id: 1001, first_name: 'John', username: 'john_doe' });
+    const initData = createValidInitData({
+      id: 1001,
+      first_name: 'John',
+      username: 'john_doe',
+    });
 
     const result = await authService.authenticateTelegramCustomer(initData);
 
@@ -230,7 +253,10 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
     expect(result.accessToken).toBe('mock-customer-jwt-token');
     expect(legacyPendingCustomer.status).toBe(CustomerStatus.ACTIVE);
     expect(legacyPendingCustomer.isActive).toBe(true);
-    expect(mockManager.save).toHaveBeenCalledWith(Customer, legacyPendingCustomer);
+    expect(mockManager.save).toHaveBeenCalledWith(
+      Customer,
+      legacyPendingCustomer,
+    );
   });
 
   // -------------------------------------------------------------
@@ -256,7 +282,10 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
     mockManager.find.mockResolvedValueOnce([]); // company check
 
     // 2. Save throws Postgres unique violation code '23505'
-    mockManager.save.mockRejectedValueOnce({ code: '23505', message: 'duplicate key value violates unique constraint' });
+    mockManager.save.mockRejectedValueOnce({
+      code: '23505',
+      message: 'duplicate key value violates unique constraint',
+    });
 
     // 3. Fallback query retrieves existing account
     mockManager.findOne.mockResolvedValueOnce(existingAccount);
@@ -295,7 +324,11 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
     };
 
     accountRepo.findOne.mockResolvedValue(activeAccount);
-    const initData = createValidInitData({ id: 1005, first_name: 'Gold', username: 'gold_partner' });
+    const initData = createValidInitData({
+      id: 1005,
+      first_name: 'Gold',
+      username: 'gold_partner',
+    });
 
     const result = await authService.authenticateTelegramCustomer(initData);
 
@@ -330,7 +363,9 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
       }),
     } as unknown as ExecutionContext;
 
-    await expect(guard.canActivate(mockContext)).rejects.toThrow(ForbiddenException);
+    await expect(guard.canActivate(mockContext)).rejects.toThrow(
+      ForbiddenException,
+    );
   });
 
   // -------------------------------------------------------------
@@ -355,8 +390,12 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
     const result = await authService.authenticateTelegramCustomer(initData);
 
     expect(result.status).toBe(CustomerStatus.REJECTED);
-    expect(result.rejectionReason).toBe('Business registration document invalid');
-    expect(result.customer.rejectionReason).toBe('Business registration document invalid');
+    expect(result.rejectionReason).toBe(
+      'Business registration document invalid',
+    );
+    expect(result.customer.rejectionReason).toBe(
+      'Business registration document invalid',
+    );
   });
 
   // -------------------------------------------------------------
@@ -393,10 +432,15 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
     expect(result.accessToken).toBe('mock-customer-jwt-token');
     // Entity was updated, not re-created
     expect(existingRejectedCustomer.companyName).toBe('Eve Updated Enterprise');
-    expect(existingRejectedCustomer.address).toBe('New Verified Address, Phnom Penh');
+    expect(existingRejectedCustomer.address).toBe(
+      'New Verified Address, Phnom Penh',
+    );
     expect(existingRejectedCustomer.status).toBe(CustomerStatus.ACTIVE);
     expect(existingRejectedCustomer.rejectionReason).toBeNull();
-    expect(mockManager.save).toHaveBeenCalledWith(Customer, existingRejectedCustomer);
+    expect(mockManager.save).toHaveBeenCalledWith(
+      Customer,
+      existingRejectedCustomer,
+    );
   });
 
   // -------------------------------------------------------------
@@ -424,7 +468,9 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
       }),
     } as unknown as ExecutionContext;
 
-    await expect(guard.canActivate(mockContext)).rejects.toThrow(ForbiddenException);
+    await expect(guard.canActivate(mockContext)).rejects.toThrow(
+      ForbiddenException,
+    );
   });
 
   // -------------------------------------------------------------
@@ -452,7 +498,9 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
       }),
     } as unknown as ExecutionContext;
 
-    await expect(guard.canActivate(mockContext)).rejects.toThrow(ForbiddenException);
+    await expect(guard.canActivate(mockContext)).rejects.toThrow(
+      ForbiddenException,
+    );
   });
 
   // -------------------------------------------------------------
@@ -528,7 +576,9 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
     expect(result.status).toBe(CustomerStatus.ACTIVE);
     expect(result.accessToken).toBe('mock-customer-jwt-token');
     expect(loggerWarnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[DUPLICATE WARNING] Registering customer has phone'),
+      expect.stringContaining(
+        '[DUPLICATE WARNING] Registering customer has phone',
+      ),
     );
   });
 
@@ -559,7 +609,9 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
     expect(result.status).toBe(CustomerStatus.ACTIVE);
     expect(result.accessToken).toBe('mock-customer-jwt-token');
     expect(loggerWarnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[DUPLICATE WARNING] Registering customer company'),
+      expect.stringContaining(
+        '[DUPLICATE WARNING] Registering customer company',
+      ),
     );
   });
 
@@ -577,7 +629,10 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
 
     customerRepo.findOne.mockResolvedValue(pendingCustomer);
 
-    const result = await authService.approveCustomer('cust-to-approve-15', 'staff-1');
+    const result = await authService.approveCustomer(
+      'cust-to-approve-15',
+      'staff-1',
+    );
 
     expect(result.success).toBe(true);
     expect(result.customer.status).toBe(CustomerStatus.ACTIVE);
@@ -681,7 +736,9 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
       ]),
     };
 
-    customerRepo.createQueryBuilder = jest.fn().mockReturnValue(mockQueryBuilder);
+    customerRepo.createQueryBuilder = jest
+      .fn()
+      .mockReturnValue(mockQueryBuilder);
 
     const result = await authService.searchCustomersForStaff('@john123');
 
