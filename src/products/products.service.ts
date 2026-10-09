@@ -25,6 +25,7 @@ import {
   createPaginatedResult,
   getPaginationOptions,
 } from '../common/pagination';
+import { deleteMultipleCloudinaryImages } from '../common/cloudinary/cloudinary.utils';
 
 @Injectable()
 export class ProductsService {
@@ -110,8 +111,22 @@ export class ProductsService {
   async remove(id: string) {
     const product = await this.findOne(id);
 
+    // Collect all associated Cloudinary images to clean up
+    const imageUrlsToDelete: (string | null | undefined)[] = [product.image];
+    if (product.variants?.length) {
+      for (const variant of product.variants) {
+        if (variant.image) {
+          imageUrlsToDelete.push(variant.image);
+        }
+      }
+    }
+
     try {
       await this.productRepository.remove(product);
+
+      // Clean up Cloudinary assets in background after successful DB deletion
+      await deleteMultipleCloudinaryImages(imageUrlsToDelete);
+
       return {
         message: 'Product deleted successfully',
       };

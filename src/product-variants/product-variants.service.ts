@@ -18,6 +18,7 @@ import {
   createPaginatedResult,
   getPaginationOptions,
 } from '../common/pagination';
+import { deleteCloudinaryImage } from '../common/cloudinary/cloudinary.utils';
 
 @Injectable()
 export class ProductVariantsService {
@@ -256,14 +257,25 @@ export class ProductVariantsService {
 
   async remove(id: string) {
     const variant = await this.findOne(id);
+    const imageUrlToDelete = variant.image;
 
     try {
       await this.variantRepository.remove(variant);
+
+      if (imageUrlToDelete) {
+        await deleteCloudinaryImage(imageUrlToDelete);
+      }
+
       return {
         message: 'Product variant deleted successfully',
       };
     } catch (error) {
-      if (error?.code === '23503') {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === '23503'
+      ) {
         throw new BadRequestException(
           'Cannot delete product variant because it is referenced by transactions or stock history. Consider deactivating it instead.',
         );

@@ -169,7 +169,7 @@ export class UsersService {
         staffId,
         temporaryPassword,
       );
-    } catch (error:any) {
+    } catch (error: any) {
       console.error('Failed to send welcome email:', error.message);
     }
 

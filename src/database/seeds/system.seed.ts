@@ -467,7 +467,7 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
     for (const definition of menuDefinitions.filter(
       (menu) => menu.parentName !== null,
     )) {
-      const parent = menus.get(definition.parentName!);
+      const parent = menus.get(definition.parentName);
 
       if (!parent) {
         throw new Error(`Parent menu ${definition.parentName} not found`);

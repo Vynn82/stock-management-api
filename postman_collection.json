@@ -120,9 +120,76 @@
       "key": "mailId",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "customerToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "customerId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "customerOrderId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "telegramInitData",
+      "value": "query_id=AAHdF6IQAAAAAN0XohD9V_test&user=%7B%22id%22%3A123456789%2C%22first_name%22%3A%22Partner%22%2C%22last_name%22%3A%22Client%22%2C%22username%22%3A%22partner_user%22%7D&auth_date=1728000000&hash=dev_hash",
+      "type": "string"
     }
   ],
   "item": [
+    {
+      "name": "00. System & Database Health (/health)",
+      "description": "Production health checks for PostgreSQL database connectivity, ping latency, memory consumption, active connection pool, and system uptime.",
+      "item": [
+        {
+          "name": "Overall System & DB Health",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Returns system status, uptime, memory consumption, and database connectivity."
+          }
+        },
+        {
+          "name": "Dedicated Database Health Metrics",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health/db",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health",
+                "db"
+              ]
+            },
+            "description": "Returns PostgreSQL latency in ms, table count, database disk size, active connections, and PostgreSQL engine version."
+          }
+        }
+      ]
+    },
     {
       "name": "01. Authentication (/auth)",
       "description": "User login, password changes, token refresh, and session logout.",
@@ -4013,6 +4080,1216 @@
               "query": []
             },
             "description": "Immediately runs and sends the Weekly Summary Report to Telegram."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "16. Customer Orders & Telegram (/customer-orders)",
+      "description": "Complete Telegram Mini App ordering system. Includes customer authentication with Telegram initData, customer registration, staff approvals, order checkout, customer responses, multi-stage order review, delivery tracking, and cash on delivery payments.",
+      "item": [
+        {
+          "name": "16.1 Customer Auth & Registration",
+          "item": [
+            {
+              "name": "Authenticate via Telegram initData (Auto-saves customerToken)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/customer-auth/telegram",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-auth",
+                    "telegram"
+                  ]
+                },
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"initData\": \"{{telegramInitData}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Verifies Telegram initData HMAC signature. Returns REGISTRATION_REQUIRED for new users, ACTIVE with JWT token for approved customers, or PENDING/REJECTED/SUSPENDED/BLOCKED status."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200 || pm.response.code === 201) {",
+                      "    var res = pm.response.json();",
+                      "    if (res.accessToken) {",
+                      "        pm.collectionVariables.set('customerToken', res.accessToken);",
+                      "        console.log('Saved customerToken:', res.accessToken);",
+                      "    }",
+                      "    if (res.customer && res.customer.id) {",
+                      "        pm.collectionVariables.set('customerId', res.customer.id);",
+                      "        console.log('Saved customerId:', res.customer.id);",
+                      "    }",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Register Customer (First Time)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/customer-auth/register",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-auth",
+                    "register"
+                  ]
+                },
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"initData\": \"{{telegramInitData}}\",\n  \"companyName\": \"Phnom Penh Retailers Ltd\",\n  \"contactName\": \"Sokha Chan\",\n  \"phone\": \"012 345 678\",\n  \"address\": \"#123, St 456, Boeung Keng Kang 1, Phnom Penh\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Submits partner business information. Automatically links to Telegram account. Checks for phone/company duplicates and sets status to PENDING waiting for staff review."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200 || pm.response.code === 201) {",
+                      "    var res = pm.response.json();",
+                      "    if (res.customer && res.customer.id) {",
+                      "        pm.collectionVariables.set('customerId', res.customer.id);",
+                      "    }",
+                      "    if (res.accessToken) {",
+                      "        pm.collectionVariables.set('customerToken', res.accessToken);",
+                      "    }",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "16.2 Staff - Customer Approvals",
+          "item": [
+            {
+              "name": "Search Customers for Order Creation (Staff)",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{accessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/customer-orders/customers/search?query=@john123",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-orders",
+                    "customers",
+                    "search"
+                  ],
+                  "query": [
+                    {
+                      "key": "query",
+                      "value": "@john123",
+                      "description": "Telegram username, Telegram user ID, company name, contact, or phone"
+                    }
+                  ]
+                },
+                "description": "Searches existing customers by Telegram username (@john123), Telegram user ID, company name, contact person, or phone number. Returns matching customers with status and canOrder flag. If not found, returns [] so staff can direct customer to register via Mini App."
+              },
+              "response": []
+            },
+            {
+              "name": "List All Customers (Staff)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/customer-orders/customers?status=PENDING",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-orders",
+                    "customers"
+                  ],
+                  "query": [
+                    {
+                      "key": "status",
+                      "value": "PENDING",
+                      "description": "Filter: PENDING, ACTIVE, REJECTED, SUSPENDED, BLOCKED"
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "description": "Search company, contact name, or phone"
+                    }
+                  ]
+                },
+                "description": "Staff/Admin endpoint to view partner registrations with their associated Telegram accounts."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "    var res = pm.response.json();",
+                      "    var list = Array.isArray(res) ? res : (res.data || []);",
+                      "    if (list.length > 0 && list[0].id) {",
+                      "        pm.collectionVariables.set('customerId', list[0].id);",
+                      "    }",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Approve Customer Registration (Staff)",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/customer-orders/customers/{{customerId}}/approve",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-orders",
+                    "customers",
+                    "{{customerId}}",
+                    "approve"
+                  ]
+                },
+                "description": "Approves a PENDING customer registration. Sets status to ACTIVE, enables ordering, and automatically notifies customer via Telegram Bot."
+              },
+              "response": []
+            },
+            {
+              "name": "Reject Customer Registration (Staff)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/customer-orders/customers/{{customerId}}/reject",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-orders",
+                    "customers",
+                    "{{customerId}}",
+                    "reject"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reason\": \"Business registration document or contact details could not be verified.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Rejects a customer registration with a required reason. Automatically sends a notification to the customer on Telegram with the reason and allows them to edit & resubmit in the Mini App."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "16.3 Customer - Orders (Mini App)",
+          "item": [
+            {
+              "name": "Create Customer Order (Mini App Checkout)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{customerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/customer-orders",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-orders"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"items\": [\n    {\n      \"productId\": \"{{productId}}\",\n      \"variantId\": \"{{variantId}}\",\n      \"quantity\": 5\n    }\n  ],\n  \"deliveryAddress\": \"#123 St 456, Phnom Penh\",\n  \"remark\": \"Please call before delivery.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Creates a new order from Mini App cart. Generates human-readable orderNo (ORD-YYYYMMDD-XXXX). Fetches official unit prices from DB. Sets status to PENDING_REVIEW. Dispatches Telegram notification to customer and internal Mail to staff."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200 || pm.response.code === 201) {",
+                      "    var res = pm.response.json();",
+                      "    if (res.id) {",
+                      "        pm.collectionVariables.set('customerOrderId', res.id);",
+                      "        console.log('Saved customerOrderId:', res.id);",
+                      "    }",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "List My Orders (Customer)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{customerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/customer-orders/my-orders?page=1&limit=10",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-orders",
+                    "my-orders"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    },
+                    {
+                      "key": "status",
+                      "value": "",
+                      "description": "Optional filter by status"
+                    }
+                  ]
+                },
+                "description": "Returns paginated orders belonging strictly to the authenticated customer."
+              },
+              "response": []
+            },
+            {
+              "name": "Get My Order Details (Customer)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{customerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/customer-orders/my-orders/{{customerOrderId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-orders",
+                    "my-orders",
+                    "{{customerOrderId}}"
+                  ]
+                },
+                "description": "Returns order details, items, negotiation messages, and payment records for the customer. Strictly validates ownership."
+              },
+              "response": []
+            },
+            {
+              "name": "Customer Response: ⚡ Get Available Now (ACCEPT)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{customerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/customer-orders/{{customerOrderId}}/customer-response",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-orders",
+                    "{{customerOrderId}}",
+                    "customer-response"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"responseType\": \"ACCEPT\",\n  \"acceptedQuantity\": 100,\n  \"message\": \"I accept 100 units now, please proceed with fulfillment.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Customer accepts the available partial quantity. Deducts accepted quantity from warehouse stock, updates approvedQuantity, and sets status to CONFIRMED."
+              },
+              "response": []
+            },
+            {
+              "name": "Customer Response: ⏳ Wait for All Stock (WAIT_STOCK)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{customerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/customer-orders/{{customerOrderId}}/customer-response",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-orders",
+                    "{{customerOrderId}}",
+                    "customer-response"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"responseType\": \"WAIT_STOCK\",\n  \"message\": \"I choose to wait for all 200 units to arrive.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Customer chooses to wait for all requested units. Sets order status to WAITING_STOCK, approvedQuantity to 0, waitingQuantity to requested quantity, does not deduct stock now, and queues the order."
+              },
+              "response": []
+            },
+            {
+              "name": "Customer Response: ❌ Cancel Order (REJECT)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{customerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/customer-orders/{{customerOrderId}}/customer-response",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-orders",
+                    "{{customerOrderId}}",
+                    "customer-response"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"responseType\": \"REJECT\",\n  \"message\": \"Please cancel my order.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Customer rejects and cancels the order. Sets order status to CANCELLED and releases any reserved inventory."
+              },
+              "response": []
+            },
+            {
+              "name": "Customer Response: 💬 Free-Text Message (MESSAGE)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{customerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/customer-orders/{{customerOrderId}}/customer-response",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-orders",
+                    "{{customerOrderId}}",
+                    "customer-response"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"responseType\": \"MESSAGE\",\n  \"message\": \"Can you check if another branch or warehouse has stock?\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Customer sends a free-text message/inquiry. Logs message to order history and notifies staff without manipulating stock directly."
+              },
+              "response": []
+            },
+            {
+              "name": "Cancel Order (Customer)",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{customerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/customer-orders/{{customerOrderId}}/cancel",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-orders",
+                    "{{customerOrderId}}",
+                    "cancel"
+                  ]
+                },
+                "description": "Allows a customer to cancel an order that is still in review/negotiation stage."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "16.4 Staff - Order Management & Fulfilment",
+          "item": [
+            {
+              "name": "List Customer Orders for Staff",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/customer-orders?page=1&limit=20&status=PENDING_REVIEW",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-orders"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "status",
+                      "value": "PENDING_REVIEW",
+                      "description": "PENDING_REVIEW, WAITING_CUSTOMER, CONFIRMED, WAITING_STOCK, PROCESSING, OUT_FOR_DELIVERY, DELIVERED, COMPLETED, REJECTED, CANCELLED"
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "description": "Search orderNo or customer name"
+                    }
+                  ]
+                },
+                "description": "Returns all customer orders with customer relations and item details for staff dashboard."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "    var res = pm.response.json();",
+                      "    var list = Array.isArray(res) ? res : (res.data || []);",
+                      "    if (list.length > 0 && list[0].id) {",
+                      "        pm.collectionVariables.set('customerOrderId', list[0].id);",
+                      "    }",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Create Order by Staff (For Existing Customer)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200 || pm.response.code === 201) {",
+                      "    var res = pm.response.json();",
+                      "    if (res.id) {",
+                      "        pm.collectionVariables.set('customerOrderId', res.id);",
+                      "    }",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{accessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"deliveryAddress\": \"#123 St 456, Phnom Penh\",\n  \"remark\": \"Customer placed order via Telegram chat\",\n  \"items\": [\n    {\n      \"productId\": \"{{productId}}\",\n      \"quantity\": 5\n    }\n  ]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/customer-orders/staff",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-orders",
+                    "staff"
+                  ]
+                },
+                "description": "Allows sales/staff to place an order directly on behalf of an existing ACTIVE customer. Uses same customer_orders and customer_order_items tables. Status is immediately CONFIRMED, stock is locked and deducted, and customer is notified via Telegram."
+              },
+              "response": []
+            },
+            {
+              "name": "Get Order Details (Staff)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/customer-orders/{{customerOrderId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-orders",
+                    "{{customerOrderId}}"
+                  ]
+                },
+                "description": "Returns single customer order with full item, message, and payment history."
+              },
+              "response": []
+            },
+            {
+              "name": "Staff Action - Accept Order",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/customer-orders/{{customerOrderId}}/accept",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-orders",
+                    "{{customerOrderId}}",
+                    "accept"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"warehouseCode\": \"WH001\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Staff accepts the order. If full stock is available, sets status to PROCESSING and reserves inventory. Notifies customer on Telegram."
+              },
+              "response": []
+            },
+            {
+              "name": "Staff Action - Ask Customer Question",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/customer-orders/{{customerOrderId}}/ask-customer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-orders",
+                    "{{customerOrderId}}",
+                    "ask-customer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"question\": \"We only have 3 units in stock currently. Would you like to proceed with partial delivery?\",\n  \"proposedQuantity\": 3\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Staff asks customer a question regarding partial availability (e.g. Requested 200, Available 100). Transitions status to WAITING_CUSTOMER and sends interactive Telegram buttons: [⚡ Get Available Now (100)], [⏳ Wait for All (200)], [❌ Cancel]."
+              },
+              "response": []
+            },
+            {
+              "name": "Staff Action - Reject Order",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/customer-orders/{{customerOrderId}}/reject",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-orders",
+                    "{{customerOrderId}}",
+                    "reject"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reason\": \"Item is discontinued and cannot be fulfilled.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Staff rejects the customer order. Status becomes REJECTED and customer is notified via Telegram Bot."
+              },
+              "response": []
+            },
+            {
+              "name": "Staff - Confirm Custom / Partial Quantities",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/customer-orders/{{customerOrderId}}/confirm-quantity",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-orders",
+                    "{{customerOrderId}}",
+                    "confirm-quantity"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"items\": [\n    {\n      \"itemId\": \"item-uuid-here\",\n      \"approvedQuantity\": 3,\n      \"waitingQuantity\": 2\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Sets approved and waiting quantities. Strictly enforces invariant: approvedQuantity + waitingQuantity <= requestedQuantity."
+              },
+              "response": []
+            },
+            {
+              "name": "Staff - Process Order (Allocate Stock)",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/customer-orders/{{customerOrderId}}/process",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-orders",
+                    "{{customerOrderId}}",
+                    "process"
+                  ]
+                },
+                "description": "Verifies and deducts stock from warehouse for approved items. Transitions status to PROCESSING."
+              },
+              "response": []
+            },
+            {
+              "name": "Update Delivery Status - Out for Delivery",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/customer-orders/{{customerOrderId}}/out-for-delivery",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-orders",
+                    "{{customerOrderId}}",
+                    "out-for-delivery"
+                  ]
+                },
+                "description": "Marks order as OUT_FOR_DELIVERY. Dispatches Telegram notification to customer with driver information."
+              },
+              "response": []
+            },
+            {
+              "name": "Update Delivery Status - Delivered",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/customer-orders/{{customerOrderId}}/delivered",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-orders",
+                    "{{customerOrderId}}",
+                    "delivered"
+                  ]
+                },
+                "description": "Marks order deliveryStatus as DELIVERED. Customer is notified to pay cash on delivery."
+              },
+              "response": []
+            },
+            {
+              "name": "Record Cash Payment (Staff)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/customer-orders/{{customerOrderId}}/payment",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-orders",
+                    "{{customerOrderId}}",
+                    "payment"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"amount\": 1250,\n  \"paymentMethod\": \"CASH\",\n  \"notes\": \"Cash received upon delivery by driver.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Records cash collected from customer. Sets paymentStatus to PAID and logs staff member who collected it."
+              },
+              "response": []
+            },
+            {
+              "name": "Complete Order (Staff)",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/customer-orders/{{customerOrderId}}/complete",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customer-orders",
+                    "{{customerOrderId}}",
+                    "complete"
+                  ]
+                },
+                "description": "Finalizes the customer order. Status transitions to COMPLETED. Telegram completion confirmation sent to customer."
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "17. Executive & Operational Dashboard (/dashboard)",
+      "item": [
+        {
+          "name": "Get Unified Dashboard Summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard?days=7&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard"
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "7",
+                  "description": "Trend days window (1-90, default 7)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Item limit for top products, low stock, and recent lists"
+                }
+              ]
+            },
+            "description": "Unified dashboard endpoint returning all KPIs (Inventory, Orders, Revenue, Customers, Staff, Requests), 7-day sales trend, status/source breakdowns, top products, low stock alerts, and recent orders/adjustments."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Dashboard KPIs Only",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/kpis",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "kpis"
+              ]
+            },
+            "description": "Lightweight endpoint returning high-level summary KPI counters across Inventory, Orders, Revenue, Customers, Staff, and Pending Requests."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Sales & Order Trend",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/sales-trend?days=30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "sales-trend"
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "30",
+                  "description": "Number of days (default 7, max 90)"
+                }
+              ]
+            },
+            "description": "Time-series daily revenue, order counts, and units sold for charting and analytical trends."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Orders Breakdown (Status & Source)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/orders-breakdown",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "orders-breakdown"
+              ]
+            },
+            "description": "Breakdown of customer orders grouped by status (PENDING_REVIEW, WAITING_STOCK, CONFIRMED, etc.) and by source (MINI_APP, STAFF) with counts and percentages."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Top-Selling Products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/top-products?limit=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "top-products"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "5",
+                  "description": "Number of top products (1-50, default 10)"
+                }
+              ]
+            },
+            "description": "Top-selling products ordered by quantity sold and gross revenue."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Urgent Low Stock Alerts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/low-stock?limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "low-stock"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Max alert count (1-50, default 10)"
+                }
+              ]
+            },
+            "description": "Urgent inventory alerts for items with zero stock (OUT_OF_STOCK) or stock at/below minimum threshold (LOW_STOCK)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Recent Customer Orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/recent-orders?limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "recent-orders"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Latest customer orders with customer details, order numbers, amounts, and statuses."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Recent Stock Adjustments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/recent-adjustments?limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "recent-adjustments"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Latest inventory adjustment logs (damaged goods, audit corrections, etc.)."
           },
           "response": []
         }

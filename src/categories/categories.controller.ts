@@ -14,6 +14,7 @@ import { CategoriesService } from './categories.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { PaginationDto } from '../common/pagination';
+import { Public } from '../auth/decorators/public.decorator';
 
 @Controller('categories')
 export class CategoriesController {
@@ -24,11 +25,13 @@ export class CategoriesController {
     return this.categoriesService.create(createCategoryDto);
   }
 
+  @Public()
   @Get()
   findAll(@Query() query: PaginationDto) {
     return this.categoriesService.findAll(query);
   }
 
+  @Public()
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.categoriesService.findOne(id);

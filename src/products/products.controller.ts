@@ -93,6 +93,7 @@ export class ProductsController {
     );
   }
 
+  @Public()
   @Get()
   async findAll(@Query() query: ProductFilterDto) {
     return this.productsService.findAll(query);
@@ -151,6 +152,7 @@ export class ProductsController {
     return this.productsService.createManyDirect(batchItems, req.user.sub);
   }
 
+  @Public()
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.productsService.findOne(id);

@@ -191,7 +191,9 @@ export class RequestsController {
           typeof approversRaw === 'string'
             ? JSON.parse(approversRaw)
             : approversRaw;
-      } catch {}
+      } catch {
+        // Ignore JSON parse error, keep previous dto.approvers
+      }
     }
 
     // ---------------------------------------------

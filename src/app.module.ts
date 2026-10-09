@@ -1,8 +1,10 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 
+import { LoggerModule } from './common/logger/logger.module';
+import { HttpLoggerMiddleware } from './common/logger/http-logger.middleware';
 import { UsersModule } from './users/users.module';
 import { RolesModule } from './roles/roles.module';
 import { PermissionsModule } from './permissions/permissions.module';
@@ -21,6 +23,9 @@ import { MailsModule } from './mails/mails.module';
 import { StockModule } from './stock/stock.module';
 import { StockAdjustmentsModule } from './stock-adjustments/stock-adjustments.module';
 import { ReportsModule } from './reports/reports.module';
+import { CustomerOrdersModule } from './customer-orders/customer-orders.module';
+import { HealthModule } from './health/health.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -89,6 +94,15 @@ import { ReportsModule } from './reports/reports.module';
     StockAdjustmentsModule,
 
     ReportsModule,
+    CustomerOrdersModule,
+    LoggerModule,
+    HealthModule,
+    DashboardModule,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(HttpLoggerMiddleware).forRoutes('*');
+  }
+}
+

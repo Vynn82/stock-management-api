@@ -783,12 +783,6 @@ export class RequestsService {
           break;
         }
 
-        case RequestType.STOCK_ADJUSTMENT: {
-          await this.adjustStockFromRequest(manager, request);
-
-          break;
-        }
-
         default:
           throw new BadRequestException(
             `Unsupported request type: ${request.requestType}`,
@@ -1383,7 +1377,7 @@ export class RequestsService {
     item.variantImage = variantImageUrl ?? null;
     item.variantCostPrice =
       variant?.variantCostPrice ??
-      (variant as any)?.basePrice ??
+      variant?.basePrice ??
       stock?.variantCostPrice ??
       stock?.variantBasePrice ??
       stock?.costPrice ??
@@ -1391,7 +1385,7 @@ export class RequestsService {
       null;
     item.variantSellingPrice =
       variant?.variantSellingPrice ??
-      (variant as any)?.sellingPrice ??
+      variant?.sellingPrice ??
       stock?.variantSellingPrice ??
       stock?.sellingPrice ??
       null;

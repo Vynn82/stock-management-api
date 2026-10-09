@@ -96,6 +96,20 @@ The workflow supports configurable certification and approval steps.
 - Notification functionality
 - Workflow-related notifications
 
+### 📱 Telegram Mini App Customer Registration & Ordering
+
+- Telegram WebApp HMAC-SHA-256 signature verification (passwordless authentication)
+- Two-tier decoupled customer business profile (`customers`) & Telegram accounts (`customer_telegram_accounts`)
+- Strong duplicate registration protection with normalized phone & company duplicate detection
+- Full customer lifecycle: `REGISTRATION_REQUIRED` $\rightarrow$ `PENDING` $\rightarrow$ `ACTIVE` / `REJECTED` / `SUSPENDED` / `BLOCKED`
+- Staff review, approval, and rejection with reason & Telegram notification
+- Rejected customer re-registration and in-place correction (no duplicate records)
+- Full order lifecycle: `PENDING_REVIEW` $\rightarrow$ `WAITING_CUSTOMER` $\rightarrow$ `CONFIRMED` $\rightarrow$ `WAITING_STOCK` $\rightarrow$ `PROCESSING` $\rightarrow$ `OUT_FOR_DELIVERY` $\rightarrow$ `DELIVERED` $\rightarrow$ `COMPLETED`
+- Negotiation & messaging audit trail between customer and staff
+- Multi-warehouse stock allocation with strict quantity invariant ($\text{approved} + \text{waiting} \le \text{requested}$)
+- Cash on delivery payment recording (no online payment gateways)
+- Real-time automated Telegram notifications for all order and customer status milestones
+
 ### 📈 Reports
 
 - Stock reports
