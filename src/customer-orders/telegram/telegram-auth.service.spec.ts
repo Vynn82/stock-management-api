@@ -30,8 +30,12 @@ import { ProductVariant } from '../../product-variants/entities/product-variant.
 import { Stock } from '../../stock/entities/stock.entity';
 import { Warehouse } from '../../warehouses/entities/warehouse.entity';
 import { MailsService } from '../../mails/mails.service';
+import * as dotenv from 'dotenv';
+dotenv.config();
 
-const TEST_BOT_TOKEN = '';
+const TEST_BOT_TOKEN = (process.env.TELEGRAM_BOT_TOKEN || '')
+  .replace(/^["']|["']$/g, '')
+  .trim();
 
 function createValidInitData(
   user: any,
