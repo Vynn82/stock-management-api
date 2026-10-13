@@ -258,7 +258,7 @@ export class TelegramService {
         }),
       });
 
-      const data = (await response.json()) as any;
+      const data = await response.json();
 
       if (!response.ok || !data.ok) {
         this.logger.error(
@@ -298,11 +298,7 @@ export class TelegramService {
       const periodLabel = report.period === 'WEEKLY' ? 'Weekly' : 'Daily';
       const filename = `${periodLabel} Report ${dateStr}.pdf`;
 
-      const docResult = await this.sendDocument(
-        pdfBuffer,
-        filename,
-        filename,
-      );
+      const docResult = await this.sendDocument(pdfBuffer, filename, filename);
       pdfSent = docResult.sent;
     } catch (pdfError: any) {
       this.logger.error(
@@ -329,7 +325,9 @@ export class TelegramService {
     const { botToken, chatId } = this.getCredentials();
 
     if (!botToken || !chatId) {
-      this.logger.warn('Cannot send document: Telegram credentials are not configured.');
+      this.logger.warn(
+        'Cannot send document: Telegram credentials are not configured.',
+      );
       return {
         sent: false,
         message: 'Telegram credentials are empty or not configured.',
@@ -357,7 +355,7 @@ export class TelegramService {
         body: formData,
       });
 
-      const data = (await response.json()) as any;
+      const data = await response.json();
 
       if (!response.ok || !data.ok) {
         this.logger.error(

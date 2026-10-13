@@ -8,7 +8,16 @@ describe('MailsController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [MailsController],
-      providers: [MailsService],
+      providers: [
+        {
+          provide: MailsService,
+          useValue: {
+            findByUser: jest.fn(),
+            getUnreadCount: jest.fn(),
+            markAsRead: jest.fn(),
+          },
+        },
+      ],
     }).compile();
 
     controller = module.get<MailsController>(MailsController);

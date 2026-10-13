@@ -29,7 +29,28 @@ A comprehensive guide and reference for all endpoints, authentication rules, glo
 16. [Mails & Notifications API (`/mails`)](#16-mails--notifications-api-mails)
 17. [Direct Stock & Adjustments API (`/stock`, `/stock-adjustments`)](#17-direct-stock--adjustments-api)
 18. [Sales, Profit & Inventory Reports API (`/reports`)](#18-sales-profit--inventory-reports-api)
-19. [Barcodes, QR Codes & Printable Labels API (`/barcodes`, `/products`, `/product-variants`)](#19-barcodes-qr-codes--printable-labels-api)
+19. [Customer Telegram Registration, Authentication & Ordering Flow API (`/customer-orders`)](#19-customer-telegram-registration-authentication--ordering-flow-api-customer-orders)
+    - [19.1 Architecture & Flow Overview](#191-architecture--flow-overview)
+    - [19.2 Two-Tier Database Schema & Entities](#192-two-tier-database-schema--entities)
+    - [19.3 Customer Telegram Authentication & Registration Endpoints](#193-customer-telegram-authentication--registration-endpoints)
+    - [19.4 Staff Review & Customer Approval Endpoints](#194-staff-review--customer-approval-endpoints)
+    - [19.5 Customer Ordering Lifecycle Endpoints](#195-customer-ordering-lifecycle-endpoints)
+    - [19.6 Business Rules & Invariants](#196-business-rules--invariants)
+20. [System & Database Health API (`/health`)](#20-system--database-health-api-health)
+21. [Executive & Operational Dashboard API (`/dashboard`)](#21-executive--operational-dashboard-api-dashboard)
+    - [21.1 Unified Dashboard Summary](#211-unified-dashboard-summary)
+    - [21.2 Dashboard KPIs Only](#212-dashboard-kpis-only)
+    - [21.3 Time-Series Sales & Orders Trend](#213-time-series-sales--orders-trend)
+    - [21.4 Order Status & Source Breakdowns](#214-order-status--source-breakdowns)
+    - [21.5 Top-Selling Products](#215-top-selling-products)
+    - [21.6 Urgent Low-Stock Alerts](#216-urgent-low-stock-alerts)
+    - [21.7 Recent Orders & Stock Adjustments](#217-recent-orders--stock-adjustments)
+22. [Barcodes, QR Codes & Printable Labels API (`/barcodes`, `/products`, `/product-variants`)](#22-barcodes-qr-codes--printable-labels-api)
+    - [22.1 Fast Scanner Resolution / Lookup](#221-fast-scanner-resolution--lookup)
+    - [22.2 Product-Specific Barcodes & QR Codes](#222-product-specific-barcodes--qr-codes)
+    - [22.3 Product Variant-Specific Barcodes & QR Codes](#223-product-variant-specific-barcodes--qr-codes)
+    - [22.4 Printable Thermal PDF Labels](#224-printable-thermal-pdf-labels)
+    - [22.5 Automatic Barcode Generation & Real-time QR Synchronization](#225-automatic-barcode-generation--real-time-qr-synchronization)
 
 ---
 
@@ -50,10 +71,10 @@ Content-Type: application/json
 
 A ready-to-import Postman Collection v2.1.0 is available at [`postman_collection.json`](file:///d:/ACLEDA/Y4-S1/Project%20Management/stock-management-api/postman_collection.json) in the project root:
 
-- **110 pre-configured requests** categorized across 16 folders matching this documentation.
+- **123 pre-configured requests** categorized across 19 folders matching this documentation.
 - Built-in `{{baseUrl}}` variable pointing to `http://localhost:3000`.
-- **Automatic Token Handling**: Running `POST /auth/login` automatically extracts `accessToken` and `refreshToken` and saves them to collection variables.
-- All subsequent protected requests inherit the Bearer token automatically.
+- **Automatic Token Handling**: Running `POST /auth/login` extracts staff `accessToken`, and `POST /customer-auth/telegram` extracts `customerToken`.
+- All subsequent protected requests inherit the respective Bearer tokens automatically.
 
 ---
 
@@ -1538,11 +1559,819 @@ _(Note: If left empty with double quotes, cron jobs will log a warning and skip 
 
 ---
 
-## 19. Barcodes, QR Codes & Printable Labels API
+## 19. Customer Telegram Registration, Authentication & Ordering Flow API (`/customer-orders`)
+
+The Telegram ordering system enables verified partners/customers to register, get staff approval, browse inventory, place orders, communicate with staff regarding availability, receive delivery, and pay with cash on delivery.
+
+---
+
+### 19.1 Architecture & Flow Overview
+
+#### 19.1.1 Customer Identity & Registration Flow
+
+```mermaid
+flowchart TD
+    A["Customer opens Telegram Mini App"] --> B["Frontend extracts Telegram initData"]
+    B --> C["POST /customer-orders/auth/telegram"]
+    C --> D{"Verify HMAC-SHA256 signature against Bot Token"}
+    D -- "Invalid Signature" --> E["401 Unauthorized"]
+    D -- "Valid Signature" --> F["Extract telegram_user_id & metadata"]
+    F --> G{"Lookup customer_telegram_accounts"}
+    G -- "Not Found" --> H["Status: REGISTRATION_REQUIRED"]
+    H --> I["Mini App displays Registration Screen"]
+    I --> J["Customer enters Company, Contact, Phone, Delivery Address"]
+    J --> K["POST /customer-orders/auth/register"]
+    K --> L["Normalize Phone (+855... -> 0...) & Company Name"]
+    L --> M{"Check duplicate phone/company"}
+    M -- "Duplicate detected" --> N["Log warning for staff review (do NOT silently merge)"]
+    M -- "Unique" --> O["Proceed to insert"]
+    N --> O
+    O --> P["Insert Customer (status: ACTIVE, isActive: true) & CustomerTelegramAccount"]
+    P --> Q["Issue Customer JWT & Return status: ACTIVE"]
+    Q --> W["Mini App unlocks Product Catalog & Ordering"]
+    G -- "Found Customer" --> R{"Evaluate Customer Status"}
+    R -- "Legacy PENDING" --> S["Auto-activate to ACTIVE & Issue JWT"]
+    S --> W
+    R -- "REJECTED" --> T["Mini App displays Rejection Reason & allows Edit & Resubmit"]
+    T --> K
+    R -- "SUSPENDED / BLOCKED" --> U["Mini App displays Access Restriction screen"]
+    R -- "ACTIVE" --> V["Issue Customer JWT (Role: CUSTOMER, 7d expiry)"]
+    V --> W
+```
+
+#### 19.1.2 Complete Customer Order Lifecycle Flow
+
+```mermaid
+flowchart TD
+    A["ACTIVE Customer creates Order\nPOST /customer-orders"] --> B["Status: PENDING_REVIEW\nsource: MINI_APP\nPayment: UNPAID (Cash)\nTelegram & Mail Notification Sent"]
+    B --> C["Staff Reviews Order"]
+    C --> D{"Staff Action"}
+    
+    D -- "REJECT" --> E["Status: REJECTED\nNotify Customer via Telegram"]
+    
+    D -- "ASK_QUESTION (Partial Stock)" --> F["Status: WAITING_CUSTOMER\nTelegram sends 3 buttons:\n- ⚡ Get Available Now\n- ⏳ Wait for All\n- ❌ Cancel"]
+    F --> G{"Customer Response\nPOST /customer-orders/:id/customer-response"}
+    G -- "⚡ Get Available Now (ACCEPT)" --> H["Status: CONFIRMED\nAvailable quantity deducted from stock"]
+    G -- "⏳ Wait for All (WAIT_STOCK)" --> L["Status: WAITING_STOCK\napprovedQty: 0, waitingQty: total\nNo stock deducted now"]
+    G -- "❌ Cancel (REJECT)" --> I["Status: CANCELLED"]
+    G -- "💬 MESSAGE (Free text)" --> B
+    
+    D -- "ACCEPT" --> H["Status: CONFIRMED\nFull stock deducted"]
+    
+    H --> J{"Stock Allocation\nPOST /customer-orders/:id/allocate-stock"}
+    J -- "All requested stock available" --> K["Status: PROCESSING\nPhysical warehouse stock deducted"]
+    J -- "Partial stock waiting" --> L["Status: WAITING_STOCK\nPartial stock reserved"]
+    L -->|"Future stock arrives"| J
+    
+    K --> M["Out For Delivery\nPOST /customer-orders/:id/delivery-status\ndeliveryStatus: OUT_FOR_DELIVERY"]
+    M --> N["Delivered\nPOST /customer-orders/:id/delivery-status\ndeliveryStatus: DELIVERED"]
+    
+    N --> O["Customer Pays Cash on Delivery\nPOST /customer-orders/:id/record-payment\npaymentStatus: PAID"]
+    O --> P["Order Completed\nPOST /customer-orders/:id/complete\nStatus: COMPLETED"]
+```
+
+---
+
+### 19.2 Two-Tier Database Schema & Entities
+
+The system strictly decouples the legal/commercial Customer business profile from the Telegram communication identity:
+
+| Table | Primary Purpose | Key Columns |
+| :--- | :--- | :--- |
+| `customers` | Business profile & approval status | `id` (UUID), `company_name`, `contact_name`, `phone`, `address`, `status` (`PENDING`, `ACTIVE`, `REJECTED`, `SUSPENDED`, `BLOCKED`), `rejection_reason`, `is_active` |
+| `customer_telegram_accounts` | Telegram accounts associated with customer | `id` (UUID), `customer_id` (FK $\rightarrow$ `customers.id`), `telegram_user_id` (UNIQUE), `telegram_chat_id`, `telegram_username`, `first_name`, `last_name` |
+| `customer_orders` | Header of partner orders | `id` (UUID), `order_no` (e.g. `ORD-20261004-5821`), `customer_id`, `telegram_user_id`, `telegram_chat_id`, `status`, `delivery_status`, `payment_status`, `payment_method` (`CASH`), `total_amount`, `delivery_address`, `remark`, `staff_notes` |
+| `customer_order_items` | Line items with triple quantity tracking | `id` (UUID), `order_id`, `product_id`, `variant_id`, `warehouse_id`, `requested_quantity`, `approved_quantity`, `waiting_quantity`, `unit_price`, `subtotal`, `status` |
+| `customer_order_messages` | Full negotiation audit trail | `id` (UUID), `order_id`, `sender_type` (`CUSTOMER`, `STAFF`, `SYSTEM`), `sender_id`, `sender_name`, `message`, `message_type` (`TEXT`, `QUESTION`, `RESPONSE`, `STATUS_UPDATE`) |
+| `customer_order_payments` | Manual cash payment recording | `id` (UUID), `order_id`, `amount`, `payment_method` (`CASH`), `recorded_by_id`, `paid_at`, `notes` |
+
+---
+
+### 19.3 Customer Telegram Authentication & Registration Endpoints (`/customer-auth`)
+
+#### 19.3.1 Authenticate via Telegram InitData
+- **Endpoint**: `POST /customer-auth/telegram` *(also supports `/customer-orders/auth/telegram` for backwards compatibility)*
+- **Access**: Public
+- **Headers**: `Content-Type: application/json`
+- **Request Body**:
+  ```json
+  {
+    "initData": "query_id=AAHdF...&user=%7B%22id%22%3A1005%2C%22first_name%22%3A%22Sokha%22...%7D&auth_date=1728000000&hash=d82f..."
+  }
+  ```
+- **Responses**:
+  - **First-Time Customer (`200 OK`)**:
+    ```json
+    {
+      "status": "REGISTRATION_REQUIRED",
+      "message": "No customer account found for this Telegram account. Please register.",
+      "telegramUser": {
+        "id": 1005,
+        "first_name": "Sokha",
+        "last_name": "Chan",
+        "username": "sokhachan"
+      }
+    }
+    ```
+  - **Active Customer (`200 OK`)**:
+    ```json
+    {
+      "status": "ACTIVE",
+      "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+      "customer": {
+        "id": "2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+        "companyName": "Phnom Penh Retailers Ltd",
+        "contactName": "Sokha Chan",
+        "phone": "012345678",
+        "address": "#123 St 456, Phnom Penh",
+        "status": "ACTIVE",
+        "telegramUserId": "1005",
+        "telegramUsername": "sokhachan",
+        "firstName": "Sokha",
+        "lastName": "Chan"
+      }
+    }
+    ```
+  - **Legacy PENDING Customers (`200 OK`)**:
+    *(Auto-activated to `ACTIVE` on login and issued an `accessToken` so no legitimate customer is ever blocked)*
+  - **Rejected Customer (`200 OK`)**:
+    ```json
+    {
+      "status": "REJECTED",
+      "message": "Your registration was rejected.",
+      "rejectionReason": "Business license document could not be verified",
+      "customer": { "id": "...", "companyName": "...", "status": "REJECTED", "rejectionReason": "..." }
+    }
+    ```
+
+#### 19.3.2 Register Customer Account
+- **Endpoint**: `POST /customer-auth/register` *(also supports `/customer-orders/auth/register` for backwards compatibility)*
+- **Access**: Public
+- **Request Body**:
+  ```json
+  {
+    "initData": "query_id=AAHdF...&user=%7B%22id%22%3A1005...%7D&hash=...",
+    "companyName": "Phnom Penh Retailers Ltd",
+    "contactName": "Sokha Chan",
+    "phone": "012-345-678",
+    "address": "#123, St 456, Boeung Keng Kang 1, Phnom Penh"
+  }
+  ```
+- **Response (`201 Created` / `200 OK`)**:
+  ```json
+  {
+    "status": "ACTIVE",
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "message": "Registration successful! Welcome to the store.",
+    "customer": {
+      "id": "2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+      "companyName": "Phnom Penh Retailers Ltd",
+      "contactName": "Sokha Chan",
+      "phone": "012345678",
+      "address": "#123, St 456, Boeung Keng Kang 1, Phnom Penh",
+      "status": "ACTIVE",
+      "telegramUserId": "1005",
+      "telegramUsername": "sokhachan",
+      "firstName": "Sokha",
+      "lastName": "Chan"
+    }
+  }
+  ```
+  *(Note: Registration creates the account directly as `ACTIVE`, issuing the customer JWT token so the partner can browse and order immediately without waiting for pre-approval).*
+
+---
+
+### 19.4 Staff Customer Search & Management Endpoints
+
+Staff members search existing registered customers, view registrations, and manage accounts.
+
+#### 19.4.1 Staff Customer Search (For Order Creation)
+- **Endpoint**: `GET /customer-orders/customers/search?query=...` (or `?q=...`)
+- **Access**: Authenticated Staff (Requires Bearer token)
+- **Query Params**:
+  - `query` / `q`: Telegram username (`@john` or `john`), Telegram user ID (`123456789`), Company name, Contact name, or Phone number.
+- **Response (`200 OK`)**:
+  ```json
+  [
+    {
+      "id": "2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+      "companyName": "Phnom Penh Retailers Ltd",
+      "contactName": "Sokha Chan",
+      "phone": "012345678",
+      "address": "#123, St 456, Phnom Penh",
+      "status": "ACTIVE",
+      "isActive": true,
+      "canOrder": true,
+      "telegramAccounts": [
+        {
+          "id": "acc-uuid",
+          "telegramUserId": "1005",
+          "telegramChatId": "chat-1005",
+          "telegramUsername": "sokhachan",
+          "firstName": "Sokha",
+          "lastName": "Chan"
+        }
+      ],
+      "createdAt": "2026-10-04T10:00:00.000Z"
+    }
+  ]
+  ```
+  *(If no customer matches: returns `[]`. The Staff Web App displays: **"Customer not found. Please ask the customer to register through the ABC Store Mini App before creating an order."** with a Copy Registration Link button).*
+
+#### 19.4.2 List Registered Customers
+- **Endpoint**: `GET /customer-orders/customers`
+- **Access**: Authenticated Staff
+- **Query Params**:
+  - `status`: Filter by `ACTIVE`, `PENDING`, `REJECTED`, `SUSPENDED`, `BLOCKED`
+  - `search`: Search across company name, contact person, or phone
+- **Response (`200 OK`)**: Array of Customer entities with joined `telegramAccounts`.
+
+#### 19.4.3 Registration Lifecycle Note: Zero Staff Approval Required
+Customer registration **does NOT require staff approval**. 
+- Newly registered customers are created directly with `status: ACTIVE` and `is_active: true`.
+- They receive their JWT `accessToken` immediately and can browse and order right away.
+- **Staff approval is enforced strictly at the Order Level** (Mini App orders enter `PENDING_REVIEW` and require Staff `ACCEPT` or `REJECT` before stock allocation and delivery dispatch).
+
+---
+
+---
+
+### 19.5 Customer Ordering Lifecycle Endpoints
+
+#### 19.5.1 Create Customer Order (Mini App Checkout)
+- **Endpoint**: `POST /customer-orders`
+- **Access**: Authenticated Customer (`CustomerJwtGuard`)
+- **Headers**: `Authorization: Bearer <customerAccessToken>`
+- **Request Body**:
+  ```json
+  {
+    "items": [
+      {
+        "productId": "0f89d6c8-8bc4-4592-9cba-25d57bfb112b",
+        "variantId": "3b2c1a0f-1111-2222-3333-444455556666",
+        "quantity": 10
+      },
+      {
+        "productId": "9a8b7c6d-5e4f-3a2b-1c0d-9e8f7a6b5c4d",
+        "quantity": 5
+      }
+    ],
+    "deliveryAddress": "#123 St 456, Phnom Penh",
+    "remark": "Please deliver before 4:00 PM."
+  }
+  ```
+- **Response (`201 Created`)**:
+  ```json
+  {
+    "id": "7c8d9e0f-1a2b-3c4d-5e6f-7a8b9c0d1e2f",
+    "orderNo": "ORD-20261004-3914",
+    "customerId": "2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+    "telegramUserId": "1005",
+    "status": "PENDING_REVIEW",
+    "deliveryStatus": "PENDING",
+    "paymentStatus": "UNPAID",
+    "paymentMethod": "CASH",
+    "totalAmount": 1250.00,
+    "items": [ ... ],
+    "createdAt": "2026-10-04T10:20:00.000Z"
+  }
+  ```
+
+#### 19.5.2 List My Orders
+- **Endpoint**: `GET /customer-orders/my-orders`
+- **Access**: Authenticated Customer
+- **Query Params**: `page`, `limit`, `status`
+- **Response (`200 OK`)**: Paginated list of customer orders owned by the authenticated customer.
+
+#### 19.5.3 Get Single Order Details
+- **Endpoint**: `GET /customer-orders/my-orders/:id`
+- **Access**: Authenticated Customer (Ownership verified: returns `403 Forbidden` if order belongs to another customer)
+
+#### 19.5.4 Customer Response to Staff Question / Proposal
+- **Endpoint**: `POST /customer-orders/:id/customer-response`
+- **Access**: Authenticated Customer
+- **Request Body**:
+  ```json
+  {
+    "responseType": "ACCEPT",
+    "itemId": "item-uuid-here",
+    "acceptedQuantity": 8,
+  }
+  ```
+  *(Supported `responseType`: `ACCEPT`, `WAIT_STOCK`, `REJECT`, `MESSAGE`)*
+  - `ACCEPT`: Accepts available quantity (`acceptedQuantity`), deducts warehouse stock, sets `approvedQuantity = acceptedQuantity`, `waitingQuantity = requested - acceptedQuantity`, and sets status to `CONFIRMED`.
+  - `WAIT_STOCK`: Customer chooses to wait for all requested units. Sets order status to `WAITING_STOCK`, `approvedQuantity = 0`, `waitingQuantity = requestedQuantity`, does not deduct stock now, and queues the order.
+  - `REJECT`: Cancels the order (`status = CANCELLED`).
+  - `MESSAGE`: Customer free-text response; sends staff notification and logs to order history without directly modifying stock.
+
+#### 19.5.5 Create Order by Staff (For Existing Customer)
+- **Endpoint**: `POST /customer-orders/staff`
+- **Access**: Authenticated Staff (Requires Bearer token)
+- **Description**: Allows sales/staff to place an order directly on behalf of an existing, `ACTIVE` customer who contacted sales directly (e.g., via Telegram chat). Uses the SAME `customer_orders` and `customer_order_items` tables as Mini App orders.
+- **Rules**:
+  - Customer must be `ACTIVE` (orders for `PENDING`, `REJECTED`, `SUSPENDED`, `BLOCKED` customers are rejected).
+  - Uses official backend prices from `products` or `product_variants`.
+  - Sets `source = 'STAFF'`, `createdByStaffId = req.user.sub`.
+  - Sets `status = 'CONFIRMED'` immediately (no pending review needed since staff initiated it).
+  - Automatically and safely locks and decrements warehouse stock immediately.
+  - Automatically notifies the customer on Telegram that an order was created and confirmed by staff.
+- **Request Body**:
+  ```json
+  {
+    "customerId": "2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+    "deliveryAddress": "#123 St 456, Phnom Penh",
+    "remark": "Phone order via Telegram chat",
+    "warehouseCode": "WH-MAIN",
+    "items": [
+      {
+        "productId": "0f89d6c8-8bc4-4592-9cba-25d57bfb112b",
+        "variantId": "3b2c1a0f-1111-2222-3333-444455556666",
+        "quantity": 10
+      }
+    ]
+  }
+  ```
+- **Response (`201 Created`)**:
+  ```json
+  {
+    "id": "8d9e0f1a-2b3c-4d5e-6f7a-8b9c0d1e2f3a",
+    "orderNo": "ORD-20261004-9842",
+    "customerId": "2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+    "status": "CONFIRMED",
+    "source": "STAFF",
+    "createdByStaffId": "staff-user-uuid",
+    "deliveryStatus": "PENDING",
+    "paymentStatus": "UNPAID",
+    "totalAmount": 1250.00,
+    "items": [
+      {
+        "productId": "0f89d6c8-8bc4-4592-9cba-25d57bfb112b",
+        "requestedQuantity": 10,
+        "approvedQuantity": 10,
+        "waitingQuantity": 0,
+        "status": "CONFIRMED"
+      }
+    ]
+  }
+  ```
+
+#### 19.5.6 Staff Order Review: Accept Order
+- **Endpoint**: `POST /customer-orders/:id/accept`
+- **Access**: Authenticated Staff (Requires Bearer token)
+- **Request Body** *(Optional)*:
+  ```json
+  {
+    "warehouseCode": "WH-MAIN"
+  }
+  ```
+- **Behavior**:
+  1. Checks order status is `PENDING_REVIEW` or `WAITING_CUSTOMER`.
+  2. Verifies warehouse inventory availability for all items using pessimistic write lock.
+  3. Deducts approved quantities directly from warehouse inventory.
+  4. Sets `order.status = 'CONFIRMED'`.
+  5. **Sends real-time Telegram confirmation message to the customer**:
+     ```text
+     ✅ Order Confirmed!
+     Order #ORD-20261006-XXXX has been accepted by our staff and is scheduled for fulfillment.
+     Thank you for your business!
+     ```
+- **Response (`200 OK`)**: Returns updated order with status `CONFIRMED`.
+
+#### 19.5.7 Staff Order Review: Reject Order
+- **Endpoint**: `POST /customer-orders/:id/reject`
+- **Access**: Authenticated Staff (Requires Bearer token)
+- **Request Body** *(Optional)*:
+  ```json
+  {
+    "reason": "Delivery location is outside our operational service area."
+  }
+  ```
+- **Behavior**:
+  1. Checks order is `PENDING_REVIEW`, `WAITING_CUSTOMER`, or `WAITING_STOCK`.
+  2. Releases any held/reserved warehouse stock.
+  3. Sets `order.status = 'REJECTED'`.
+  4. Logs rejection reason to order history and staff audit messages.
+  5. **Sends real-time Telegram rejection notification to the customer with reason**:
+     ```text
+     ❌ Order Update: Order #ORD-20261006-XXXX Rejected
+     Reason: Delivery location is outside our operational service area.
+     We apologize for the inconvenience. Please contact our staff if you have any questions.
+     ```
+- **Response (`200 OK`)**: Returns updated order with status `REJECTED`.
+
+#### 19.5.8 Staff Order Review: Propose Partial Stock (3 Dynamic Buttons)
+- **Endpoint**: `POST /customer-orders/:id/ask-customer`
+- **Access**: Authenticated Staff (Requires Bearer token)
+- **Request Body**:
+  ```json
+  {
+    "question": "Only 100 units available right now. How would you like to proceed?",
+    "proposedQuantity": 100
+  }
+  ```
+- **Behavior**:
+  1. Sets `order.status = 'WAITING_CUSTOMER'`.
+  2. Dynamically calculates `requestedQuantity` from order.
+  3. **Sends 3 full-width interactive buttons to customer on Telegram**:
+     - `[ ⚡ Get Available Now (100) ]` $\rightarrow$ Callback `ACCEPT_QTY`
+     - `[ ⏳ Wait for All (200) ]` $\rightarrow$ Callback `WAIT_ALL`
+     - `[ ❌ Cancel ]` $\rightarrow$ Callback `CANCEL_ORDER`
+- **Response (`200 OK`)**: Returns updated order with status `WAITING_CUSTOMER`.
+
+#### 19.5.9 Staff Delivery & Payment Lifecycle
+- **`POST /customer-orders/:id/process`**: Marks order as being prepared/packed (`notifyOrderProcessing`).
+- **`POST /customer-orders/:id/out-for-delivery`**: Dispatches delivery vehicle (`notifyOutForDelivery`).
+- **`POST /customer-orders/:id/delivered`**: Records delivery arrival at customer site (`notifyOrderDelivered`).
+- **`POST /customer-orders/:id/payment`**: Records collected cash (`notifyPaymentReceived`).
+- **`POST /customer-orders/:id/complete`**: Formally closes order (`notifyOrderCompleted`).
+
+---
+
+### 19.6 Business Rules & Invariants
+
+1. **Strict Quantity Invariant**:
+   At all stages of order review and stock allocation:
+   $\text{approvedQuantity} + \text{waitingQuantity} \le \text{requestedQuantity}$
+   Any operation attempting to allocate more than the requested quantity throws `400 Bad Request`.
+
+2. **Official Pricing Guarantee**:
+   Prices sent in client request bodies are ignored. The backend retrieves the current official `sellingPrice` directly from `products` or `product_variants`.
+
+3. **Cash on Delivery**:
+   Payment occurs exclusively upon physical delivery. Staff verifies cash received and records it in `customer_order_payments`. No third-party online payment gateways are integrated.
+
+4. **Multi-Channel Notifications**:
+   - Order created $\rightarrow$ Customer receives Telegram message; internal staff receives Mail notification.
+   - Question from staff $\rightarrow$ Customer receives prompt in Telegram and Mini App.
+   - Status transitions (Out for delivery, Delivered, Completed) $\rightarrow$ Real-time Telegram notification sent to customer.
+
+---
+
+## 20. System & Database Health API (`/health`)
+
+Production health endpoints for container liveness/readiness probes, uptime monitoring, latency tracking, and database metrics.
+
+### 20.1 Overall System & Database Health
+
+- **Method / Endpoint**: `GET /health`
+- **Authentication**: Public (no token required)
+- **Response `200 OK`**:
+  ```json
+  {
+    "status": "UP",
+    "timestamp": "2026-10-05T15:46:50.219Z",
+    "uptimeSeconds": 3600,
+    "uptimeFormatted": "1h 0m 0s",
+    "memory": {
+      "heapUsedMB": 45.2,
+      "heapTotalMB": 68.5,
+      "rssMB": 112.4
+    },
+    "database": {
+      "status": "UP",
+      "latencyMs": 2,
+      "version": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2)",
+      "databaseSize": "9871 kB",
+      "activeConnections": 1,
+      "tableCount": 28
+    }
+  }
+  ```
+
+### 20.2 Dedicated Database Health Metrics
+
+- **Method / Endpoint**: `GET /health/db`
+- **Authentication**: Public (no token required)
+- **Response `200 OK`**:
+  ```json
+  {
+    "status": "UP",
+    "latencyMs": 1,
+    "version": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2)",
+    "databaseSize": "9871 kB",
+    "activeConnections": 1,
+    "tableCount": 28
+  }
+  ```
+- **Error Response `503 Service Unavailable`** (When PostgreSQL is unreachable):
+  ```json
+  {
+    "status": "DOWN",
+    "latencyMs": 5002,
+    "error": "Connection terminated unexpectedly"
+  }
+  ```
+
+---
+
+## 21. Executive & Operational Dashboard API (`/dashboard`)
+
+The Dashboard API aggregates and provides real-time operational and management metrics across products, inventory valuation, customer orders, sales trends, revenue, user activity, and stock warnings.
+
+All dashboard routes support dual URL paths (`/dashboard` and `/reports/dashboard`) and require authenticated staff tokens (`Authorization: Bearer <accessToken>`).
+
+### 21.1 Unified Dashboard Summary
+
+Returns the comprehensive dashboard payload containing KPI counters, time-series sales trend, orders breakdown by status and source, top-selling products, urgent low-stock alerts, and recent activity.
+
+- **Method / Endpoint**: `GET /dashboard` or `GET /dashboard/summary`
+- **Query Parameters**:
+  - `days` (optional, integer, default: `7`, min: `1`, max: `90`): Window for sales trend chart.
+  - `limit` (optional, integer, default: `10`, min: `1`, max: `50`): Maximum items returned for top products, low stock alerts, and recent order/adjustment lists.
+- **Access**: Authenticated Staff
+- **Response `200 OK`**:
+  ```json
+  {
+    "generatedAt": "2026-10-06T16:49:09.926Z",
+    "kpis": {
+      "inventory": {
+        "totalProducts": 8,
+        "totalVariants": 9,
+        "totalStockQuantity": 353,
+        "totalStockValue": 102470,
+        "lowStockCount": 0,
+        "outOfStockCount": 0,
+        "totalWarehouses": 11
+      },
+      "orders": {
+        "totalOrders": 12,
+        "pendingOrders": 0,
+        "waitingStockOrders": 3,
+        "waitingCustomerOrders": 0,
+        "confirmedOrders": 4,
+        "deliveredOrders": 0,
+        "cancelledOrders": 1,
+        "rejectedOrders": 2,
+        "todayOrders": 4,
+        "thisWeekOrders": 12,
+        "thisMonthOrders": 12
+      },
+      "revenue": {
+        "totalRevenue": 34990,
+        "todayRevenue": 990,
+        "thisWeekRevenue": 34990,
+        "thisMonthRevenue": 34990,
+        "paidRevenue": 1275,
+        "unpaidRevenue": 85990
+      },
+      "customers": {
+        "totalCustomers": 6,
+        "activeCustomers": 6,
+        "newCustomersToday": 2,
+        "newCustomersThisWeek": 6
+      },
+      "staff": {
+        "totalStaff": 10,
+        "activeStaff": 10
+      },
+      "requests": {
+        "pendingRequests": 20,
+        "pendingStockIn": 0,
+        "pendingStockOut": 0,
+        "pendingTransfer": 0
+      }
+    },
+    "salesTrend": [
+      { "date": "2026-09-30", "ordersCount": 0, "revenue": 0, "itemsSold": 0 },
+      { "date": "2026-10-01", "ordersCount": 2, "revenue": 1450, "itemsSold": 5 },
+      { "date": "2026-10-02", "ordersCount": 3, "revenue": 2100, "itemsSold": 8 },
+      { "date": "2026-10-03", "ordersCount": 1, "revenue": 890, "itemsSold": 2 },
+      { "date": "2026-10-04", "ordersCount": 0, "revenue": 0, "itemsSold": 0 },
+      { "date": "2026-10-05", "ordersCount": 2, "revenue": 29560, "itemsSold": 1000 },
+      { "date": "2026-10-06", "ordersCount": 4, "revenue": 990, "itemsSold": 4 }
+    ],
+    "ordersByStatus": [
+      { "status": "CONFIRMED", "count": 4, "percentage": 33.3 },
+      { "status": "WAITING_STOCK", "count": 3, "percentage": 25 },
+      { "status": "REJECTED", "count": 2, "percentage": 16.7 },
+      { "status": "COMPLETED", "count": 2, "percentage": 16.7 },
+      { "status": "CANCELLED", "count": 1, "percentage": 8.3 }
+    ],
+    "ordersBySource": [
+      { "source": "MINI_APP", "count": 10, "percentage": 83.3 },
+      { "source": "STAFF", "count": 2, "percentage": 16.7 }
+    ],
+    "topProducts": [
+      {
+        "productId": "a5dd6c7a-180f-4237-9473-aa3a7b8318e8",
+        "productCode": "TEST-PROD-791489",
+        "productName": "Automated Test Product",
+        "image": null,
+        "categoryName": "Tablets & E-Readers",
+        "unitsSold": 1015,
+        "revenue": 86275
+      }
+    ],
+    "lowStockAlerts": [],
+    "recentOrders": [
+      {
+        "id": "92faef1b-36e0-4936-b43b-2d20a3436763",
+        "orderNo": "ORD-20261006-6502",
+        "customer": {
+          "id": "f05e0f4a-f8f7-41f3-8a8f-ffb70e588c0e",
+          "companyName": "Company 03647929",
+          "contactName": "Contact 03647929",
+          "phone": "012036479"
+        },
+        "totalAmount": 990,
+        "status": "REJECTED",
+        "deliveryStatus": "PENDING",
+        "paymentStatus": "UNPAID",
+        "source": "MINI_APP",
+        "itemCount": 1,
+        "createdAt": "2026-10-06T09:20:48.112Z"
+      }
+    ],
+    "recentAdjustments": [
+      {
+        "id": "df08008d-aee9-44a9-a47b-3c2aca0c3215",
+        "productCode": "PROD-909069",
+        "productName": "Direct E2E Test Product",
+        "adjustmentType": "INCREASE",
+        "quantity": 5,
+        "reason": "Automated test direct inventory addition",
+        "createdAt": "2026-10-05T08:27:49.811Z"
+      }
+    ]
+  }
+  ```
+
+---
+
+### 21.2 Dashboard KPIs Only
+
+Lightweight endpoint returning high-level summary KPI counters across Inventory, Orders, Revenue, Customers, Staff, and Pending Requests.
+
+- **Method / Endpoint**: `GET /dashboard/kpis`
+- **Access**: Authenticated Staff
+- **Response `200 OK`**:
+  ```json
+  {
+    "inventory": {
+      "totalProducts": 8,
+      "totalVariants": 9,
+      "totalStockQuantity": 353,
+      "totalStockValue": 102470,
+      "lowStockCount": 0,
+      "outOfStockCount": 0,
+      "totalWarehouses": 11
+    },
+    "orders": {
+      "totalOrders": 12,
+      "pendingOrders": 0,
+      "waitingStockOrders": 3,
+      "waitingCustomerOrders": 0,
+      "confirmedOrders": 4,
+      "deliveredOrders": 0,
+      "cancelledOrders": 1,
+      "rejectedOrders": 2,
+      "todayOrders": 4,
+      "thisWeekOrders": 12,
+      "thisMonthOrders": 12
+    },
+    "revenue": {
+      "totalRevenue": 34990,
+      "todayRevenue": 990,
+      "thisWeekRevenue": 34990,
+      "thisMonthRevenue": 34990,
+      "paidRevenue": 1275,
+      "unpaidRevenue": 85990
+    },
+    "customers": {
+      "totalCustomers": 6,
+      "activeCustomers": 6,
+      "newCustomersToday": 2,
+      "newCustomersThisWeek": 6
+    },
+    "staff": {
+      "totalStaff": 10,
+      "activeStaff": 10
+    },
+    "requests": {
+      "pendingRequests": 20,
+      "pendingStockIn": 0,
+      "pendingStockOut": 0,
+      "pendingTransfer": 0
+    }
+  }
+  ```
+
+---
+
+### 21.3 Time-Series Sales & Orders Trend
+
+Time-series daily revenue, order counts, and units sold for charting and analytical trends. Guarantees a continuous day-by-day array with 0-filled gaps.
+
+- **Method / Endpoint**: `GET /dashboard/sales-trend`
+- **Query Parameters**:
+  - `days` (optional, integer, default: `7`, min: `1`, max: `90`): Time window.
+- **Access**: Authenticated Staff
+- **Response `200 OK`**:
+  ```json
+  {
+    "days": 7,
+    "trend": [
+      { "date": "2026-09-30", "ordersCount": 0, "revenue": 0, "itemsSold": 0 },
+      { "date": "2026-10-01", "ordersCount": 2, "revenue": 1450, "itemsSold": 5 },
+      { "date": "2026-10-02", "ordersCount": 3, "revenue": 2100, "itemsSold": 8 },
+      { "date": "2026-10-03", "ordersCount": 1, "revenue": 890, "itemsSold": 2 },
+      { "date": "2026-10-04", "ordersCount": 0, "revenue": 0, "itemsSold": 0 },
+      { "date": "2026-10-05", "ordersCount": 2, "revenue": 29560, "itemsSold": 1000 },
+      { "date": "2026-10-06", "ordersCount": 4, "revenue": 990, "itemsSold": 4 }
+    ]
+  }
+  ```
+
+---
+
+### 21.4 Order Status & Source Breakdowns
+
+Returns aggregated distribution of customer orders grouped by status and source.
+
+- **Method / Endpoint**: `GET /dashboard/orders-breakdown`
+- **Access**: Authenticated Staff
+- **Response `200 OK`**:
+  ```json
+  {
+    "ordersByStatus": [
+      { "status": "CONFIRMED", "count": 4, "percentage": 33.3 },
+      { "status": "WAITING_STOCK", "count": 3, "percentage": 25 },
+      { "status": "REJECTED", "count": 2, "percentage": 16.7 },
+      { "status": "COMPLETED", "count": 2, "percentage": 16.7 },
+      { "status": "CANCELLED", "count": 1, "percentage": 8.3 }
+    ],
+    "ordersBySource": [
+      { "source": "MINI_APP", "count": 10, "percentage": 83.3 },
+      { "source": "STAFF", "count": 2, "percentage": 16.7 }
+    ]
+  }
+  ```
+
+---
+
+### 21.5 Top-Selling Products
+
+Returns top products sorted by total quantity sold.
+
+- **Method / Endpoint**: `GET /dashboard/top-products`
+- **Query Parameters**:
+  - `limit` (optional, integer, default: `10`, min: `1`, max: `50`): Max products.
+- **Access**: Authenticated Staff
+- **Response `200 OK`**:
+  ```json
+  [
+    {
+      "productId": "a5dd6c7a-180f-4237-9473-aa3a7b8318e8",
+      "productCode": "TEST-PROD-791489",
+      "productName": "Automated Test Product",
+      "image": null,
+      "categoryName": "Tablets & E-Readers",
+      "unitsSold": 1015,
+      "revenue": 86275
+    }
+  ]
+  ```
+
+---
+
+### 21.6 Urgent Low-Stock Alerts
+
+Returns products needing immediate replenishment: items with 0 stock (`OUT_OF_STOCK`) followed by items where stock is at or below minimum reorder point (`LOW_STOCK`).
+
+- **Method / Endpoint**: `GET /dashboard/low-stock`
+- **Query Parameters**:
+  - `limit` (optional, integer, default: `10`, min: `1`, max: `50`): Max alerts.
+- **Access**: Authenticated Staff
+- **Response `200 OK`**:
+  ```json
+  [
+    {
+      "productId": "f12c44bb-4e2b-4261-b51c-71649983416a",
+      "productCode": "PROD-WIRELESS-EARBUDS",
+      "productName": "Wireless Noise Cancelling Earbuds",
+      "categoryName": "Audio",
+      "currentStock": 0,
+      "minimumStock": 10,
+      "status": "OUT_OF_STOCK"
+    }
+  ]
+  ```
+
+---
+
+### 21.7 Recent Orders & Stock Adjustments
+
+- **Recent Customer Orders**: `GET /dashboard/recent-orders?limit=10`
+- **Recent Stock Adjustments**: `GET /dashboard/recent-adjustments?limit=10`
+- **Access**: Authenticated Staff
+
+---
+
+## 22. Barcodes, QR Codes & Printable Labels API
 
 Comprehensive barcode generation (1D Code128, EAN-13, Code39), 2D QR code generation, instant scanner resolution lookup, and printable thermal sticker PDF labels for products and variants.
 
-### 19.1 Fast Scanner Resolution / Lookup
+### 22.1 Fast Scanner Resolution / Lookup
 
 Resolves any scanned barcode, SKU, product code, or variant code. Returns full product/variant data, category/brand metadata, live multi-warehouse stock balances, and embedded Base64 barcode/QR previews.
 
@@ -1599,7 +2428,7 @@ GET /barcodes/lookup/8851234567890
 
 ---
 
-### 19.2 Product-Specific Barcodes & QR Codes
+### 22.2 Product-Specific Barcodes & QR Codes
 
 > [!NOTE]
 > `:id` can be either the Product UUID (e.g. `00e60628-471c-489d-b1d4-6107555228be`) or the unique Product Code (e.g. `IPHONE-16-PRO`), SKU, or Barcode.
@@ -1612,7 +2441,7 @@ GET /barcodes/lookup/8851234567890
 
 ---
 
-### 19.3 Product Variant-Specific Barcodes & QR Codes
+### 22.3 Product Variant-Specific Barcodes & QR Codes
 
 > [!NOTE]
 > `:id` can be either the Variant UUID, Variant Code (e.g. `IP16P-256-BLK`), SKU, or Barcode.
@@ -1625,7 +2454,7 @@ GET /barcodes/lookup/8851234567890
 
 ---
 
-### 19.4 Printable Thermal PDF Labels
+### 22.4 Printable Thermal PDF Labels
 
 - **Dimensions**: Standard 55mm × 35mm thermal barcode sticker (160 × 100 pt).
 - **Layout**:
@@ -1638,7 +2467,7 @@ GET /barcodes/lookup/8851234567890
 
 ---
 
-### 19.5 Automatic Barcode Generation & Real-time QR Synchronization
+### 22.5 Automatic Barcode Generation & Real-time QR Synchronization
 
 1. **Auto-Generated Barcode Numbers**:
    - When creating a product or variant (via direct API creation, multipart upload, Excel batch import, or approved Maker-Checker workflow), if the `barcode` property is empty or omitted, the system automatically assigns a unique, standard 13-digit EAN-13 barcode number with Modulo-10 checksum algorithm (Prefix `200...`).

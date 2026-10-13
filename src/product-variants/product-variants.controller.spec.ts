@@ -8,10 +8,23 @@ describe('ProductVariantsController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ProductVariantsController],
-      providers: [ProductVariantsService],
+      providers: [
+        {
+          provide: ProductVariantsService,
+          useValue: {
+            create: jest.fn(),
+            findAll: jest.fn(),
+            findOne: jest.fn(),
+            update: jest.fn(),
+            remove: jest.fn(),
+          },
+        },
+      ],
     }).compile();
 
-    controller = module.get<ProductVariantsController>(ProductVariantsController);
+    controller = module.get<ProductVariantsController>(
+      ProductVariantsController,
+    );
   });
 
   it('should be defined', () => {

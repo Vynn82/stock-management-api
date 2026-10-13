@@ -56,6 +56,7 @@ export class ProductsController {
     return this.productsService.createFromMultipart(body, files, req.user.sub);
   }
 
+  @Public()
   @Get()
   findAll(@Query() query: ProductFilterDto) {
     return this.productsService.findAll(query);
@@ -114,6 +115,7 @@ export class ProductsController {
     return this.productsService.createManyDirect(batchItems, req.user.sub);
   }
 
+  @Public()
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.productsService.findOne(id);

@@ -64,7 +64,10 @@ export class SalesReportPdfService {
         doc.on('data', (chunk) => chunks.push(chunk));
         doc.on('end', () => resolve(Buffer.concat(chunks)));
         doc.on('error', (err) => {
-          this.logger.error(`PDFKit rendering error: ${err.message}`, err.stack);
+          this.logger.error(
+            `PDFKit rendering error: ${err.message}`,
+            err.stack,
+          );
           reject(err);
         });
 
@@ -500,7 +503,12 @@ export class SalesReportPdfService {
     startY: number,
   ): number {
     let currentY = this.ensureSpace(doc, startY, 70, margin, contentWidth);
-    this.drawSectionHeader(doc, 'SALES PERFORMANCE (STOCK OUT)', margin, currentY);
+    this.drawSectionHeader(
+      doc,
+      'SALES PERFORMANCE (STOCK OUT)',
+      margin,
+      currentY,
+    );
 
     // Summary Subtext
     currentY += 16;
@@ -550,7 +558,13 @@ export class SalesReportPdfService {
       // Check for page break
       if (currentY + rowHeight > 780) {
         doc
-          .roundedRect(margin, tableStartY, contentWidth, currentY - tableStartY, 6)
+          .roundedRect(
+            margin,
+            tableStartY,
+            contentWidth,
+            currentY - tableStartY,
+            6,
+          )
           .strokeColor(COLORS.border)
           .lineWidth(0.5)
           .stroke();
@@ -750,7 +764,12 @@ export class SalesReportPdfService {
 
     const cols = [
       { key: 'code', label: 'Product Code', width: 75, align: 'left' as const },
-      { key: 'product', label: 'Product Name', width: 175, align: 'left' as const },
+      {
+        key: 'product',
+        label: 'Product Name',
+        width: 175,
+        align: 'left' as const,
+      },
       { key: 'variant', label: 'Variant', width: 95, align: 'left' as const },
       { key: 'qty', label: 'Qty Received', width: 75, align: 'right' as const },
       { key: 'cost', label: 'Total Cost', width: 90, align: 'right' as const },
@@ -765,7 +784,13 @@ export class SalesReportPdfService {
 
       if (currentY + rowHeight > 780) {
         doc
-          .roundedRect(margin, tableStartY, contentWidth, currentY - tableStartY, 6)
+          .roundedRect(
+            margin,
+            tableStartY,
+            contentWidth,
+            currentY - tableStartY,
+            6,
+          )
           .strokeColor(COLORS.border)
           .lineWidth(0.5)
           .stroke();
@@ -892,12 +917,7 @@ export class SalesReportPdfService {
     startY: number,
   ): number {
     let currentY = this.ensureSpace(doc, startY, 80, margin, contentWidth);
-    this.drawSectionHeader(
-      doc,
-      'STOCK ADJUSTMENTS & AUDIT',
-      margin,
-      currentY,
-    );
+    this.drawSectionHeader(doc, 'STOCK ADJUSTMENTS & AUDIT', margin, currentY);
 
     const adj = report.stockAdjustment;
     currentY += 16;
@@ -961,10 +981,25 @@ export class SalesReportPdfService {
 
     // Table of Adjustments by Reason
     const cols = [
-      { key: 'reason', label: 'Adjustment Reason', width: 160, align: 'left' as const },
+      {
+        key: 'reason',
+        label: 'Adjustment Reason',
+        width: 160,
+        align: 'left' as const,
+      },
       { key: 'type', label: 'Type', width: 85, align: 'center' as const },
-      { key: 'qty', label: 'Total Quantity', width: 110, align: 'right' as const },
-      { key: 'value', label: 'Total Value Impact', width: 130, align: 'right' as const },
+      {
+        key: 'qty',
+        label: 'Total Quantity',
+        width: 110,
+        align: 'right' as const,
+      },
+      {
+        key: 'value',
+        label: 'Total Value Impact',
+        width: 130,
+        align: 'right' as const,
+      },
     ];
 
     let tableStartY = currentY;
@@ -983,7 +1018,13 @@ export class SalesReportPdfService {
 
       if (currentY + Math.min(groupHeight, 60) > 780) {
         doc
-          .roundedRect(margin, tableStartY, contentWidth, currentY - tableStartY, 6)
+          .roundedRect(
+            margin,
+            tableStartY,
+            contentWidth,
+            currentY - tableStartY,
+            6,
+          )
           .strokeColor(COLORS.border)
           .lineWidth(0.5)
           .stroke();
@@ -1006,7 +1047,10 @@ export class SalesReportPdfService {
       const badgeX = margin + 160 + (85 - badgeW) / 2;
       const badgeY = currentY + 3;
 
-      doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 6).fillColor(typeBg).fill();
+      doc
+        .roundedRect(badgeX, badgeY, badgeW, badgeH, 6)
+        .fillColor(typeBg)
+        .fill();
       doc
         .font('Helvetica-Bold')
         .fontSize(6.5)
@@ -1021,33 +1065,48 @@ export class SalesReportPdfService {
         .font('Helvetica-Bold')
         .fontSize(8)
         .fillColor(COLORS.primary)
-        .text(group.reason || 'General Adjustment', margin + 6, currentY + 4.5, {
-          width: 150,
-          ellipsis: true,
-          lineBreak: false,
-        });
+        .text(
+          group.reason || 'General Adjustment',
+          margin + 6,
+          currentY + 4.5,
+          {
+            width: 150,
+            ellipsis: true,
+            lineBreak: false,
+          },
+        );
 
       // Qty
       doc
         .font('Helvetica-Bold')
         .fontSize(8)
         .fillColor(typeColor)
-        .text(`${sign}${this.formatNumber(group.totalQuantity)} units`, margin + 250, currentY + 4.5, {
-          width: 104,
-          align: 'right',
-          lineBreak: false,
-        });
+        .text(
+          `${sign}${this.formatNumber(group.totalQuantity)} units`,
+          margin + 250,
+          currentY + 4.5,
+          {
+            width: 104,
+            align: 'right',
+            lineBreak: false,
+          },
+        );
 
       // Value
       doc
         .font('Helvetica-Bold')
         .fontSize(8)
         .fillColor(typeColor)
-        .text(`${sign}${this.formatCurrency(group.totalValue)}`, margin + 360, currentY + 4.5, {
-          width: 124,
-          align: 'right',
-          lineBreak: false,
-        });
+        .text(
+          `${sign}${this.formatCurrency(group.totalValue)}`,
+          margin + 360,
+          currentY + 4.5,
+          {
+            width: 124,
+            align: 'right',
+            lineBreak: false,
+          },
+        );
 
       currentY += 18;
 
@@ -1056,7 +1115,13 @@ export class SalesReportPdfService {
         for (const it of group.items) {
           if (currentY + 14 > 780) {
             doc
-              .roundedRect(margin, tableStartY, contentWidth, currentY - tableStartY, 6)
+              .roundedRect(
+                margin,
+                tableStartY,
+                contentWidth,
+                currentY - tableStartY,
+                6,
+              )
               .strokeColor(COLORS.border)
               .lineWidth(0.5)
               .stroke();
@@ -1071,21 +1136,31 @@ export class SalesReportPdfService {
             .font('Helvetica')
             .fontSize(7)
             .fillColor(COLORS.muted)
-            .text(`• ${it.productName}${it.variantCode ? ` (${it.variantCode})` : ''}`, margin + 16, currentY + 3, {
-              width: 250,
-              ellipsis: true,
-              lineBreak: false,
-            });
+            .text(
+              `• ${it.productName}${it.variantCode ? ` (${it.variantCode})` : ''}`,
+              margin + 16,
+              currentY + 3,
+              {
+                width: 250,
+                ellipsis: true,
+                lineBreak: false,
+              },
+            );
 
           doc
             .font('Helvetica')
             .fontSize(7)
             .fillColor(COLORS.secondary)
-            .text(`${sign}${it.quantity} units  |  ${sign}${this.formatCurrency(it.value)}`, margin + 280, currentY + 3, {
-              width: 200,
-              align: 'right',
-              lineBreak: false,
-            });
+            .text(
+              `${sign}${it.quantity} units  |  ${sign}${this.formatCurrency(it.value)}`,
+              margin + 280,
+              currentY + 3,
+              {
+                width: 200,
+                align: 'right',
+                lineBreak: false,
+              },
+            );
 
           currentY += 14;
         }
@@ -1156,10 +1231,25 @@ export class SalesReportPdfService {
     }
 
     const cols = [
-      { key: 'product', label: 'Product Name', width: 175, align: 'left' as const },
+      {
+        key: 'product',
+        label: 'Product Name',
+        width: 175,
+        align: 'left' as const,
+      },
       { key: 'variant', label: 'Variant', width: 100, align: 'left' as const },
-      { key: 'current', label: 'Current Stock', width: 80, align: 'right' as const },
-      { key: 'min', label: 'Minimum Required', width: 90, align: 'right' as const },
+      {
+        key: 'current',
+        label: 'Current Stock',
+        width: 80,
+        align: 'right' as const,
+      },
+      {
+        key: 'min',
+        label: 'Minimum Required',
+        width: 90,
+        align: 'right' as const,
+      },
       { key: 'status', label: 'Status', width: 65, align: 'center' as const },
     ];
 
@@ -1172,7 +1262,13 @@ export class SalesReportPdfService {
 
       if (currentY + rowHeight > 780) {
         doc
-          .roundedRect(margin, tableStartY, contentWidth, currentY - tableStartY, 6)
+          .roundedRect(
+            margin,
+            tableStartY,
+            contentWidth,
+            currentY - tableStartY,
+            6,
+          )
           .strokeColor(COLORS.border)
           .lineWidth(0.5)
           .stroke();
@@ -1266,7 +1362,10 @@ export class SalesReportPdfService {
       const badgeX = cellX + (cols[4].width - badgeW) / 2;
       const badgeY = currentY + 3;
 
-      doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 6).fillColor(badgeBg).fill();
+      doc
+        .roundedRect(badgeX, badgeY, badgeW, badgeH, 6)
+        .fillColor(badgeBg)
+        .fill();
       doc
         .font('Helvetica-Bold')
         .fontSize(6)
@@ -1335,22 +1434,32 @@ export class SalesReportPdfService {
         .font('Helvetica')
         .fontSize(7.5)
         .fillColor(COLORS.muted)
-        .text('Confidential • Automated Business Report', margin + 170, footerTextY, {
-          width: contentWidth - 340,
-          align: 'center',
-          lineBreak: false,
-        });
+        .text(
+          'Confidential • Automated Business Report',
+          margin + 170,
+          footerTextY,
+          {
+            width: contentWidth - 340,
+            align: 'center',
+            lineBreak: false,
+          },
+        );
 
       // Right: Page Numbers
       doc
         .font('Helvetica')
         .fontSize(7.5)
         .fillColor(COLORS.secondary)
-        .text(`Page ${i + 1} of ${totalPages}`, margin + contentWidth - 160, footerTextY, {
-          width: 160,
-          align: 'right',
-          lineBreak: false,
-        });
+        .text(
+          `Page ${i + 1} of ${totalPages}`,
+          margin + contentWidth - 160,
+          footerTextY,
+          {
+            width: 160,
+            align: 'right',
+            lineBreak: false,
+          },
+        );
 
       doc.page.margins.bottom = oldBottomMargin;
     }
@@ -1367,7 +1476,10 @@ export class SalesReportPdfService {
     y: number,
   ): void {
     // Accent Bar
-    doc.rect(margin, y + 1, 3, 10).fillColor(COLORS.accent).fill();
+    doc
+      .rect(margin, y + 1, 3, 10)
+      .fillColor(COLORS.accent)
+      .fill();
 
     // Section Title
     doc
@@ -1512,7 +1624,11 @@ export class SalesReportPdfService {
 
   private drawTableHeader(
     doc: InstanceType<typeof PDFDocument>,
-    cols: { label: string; width: number; align: 'left' | 'right' | 'center' }[],
+    cols: {
+      label: string;
+      width: number;
+      align: 'left' | 'right' | 'center';
+    }[],
     margin: number,
     y: number,
   ): number {

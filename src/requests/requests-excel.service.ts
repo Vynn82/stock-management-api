@@ -40,11 +40,11 @@ export class RequestsExcelService {
     // READ ROWS
     // ---------------------------------------------------
 
-    const rows = XLSX.utils.sheet_to_json(worksheet, {
+    const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, {
       header: 1,
       defval: null,
       raw: false,
-    }) as unknown[][];
+    });
 
     // ---------------------------------------------------
     // CHECK REQUEST TYPE
@@ -72,7 +72,7 @@ export class RequestsExcelService {
     // HEADER ROW
     // ---------------------------------------------------
 
-    const headers = (rows[4] ?? []).map((header) =>
+    const headers = (rows[4] || []).map((header: any) =>
       String(header ?? '')
         .trim()
         .toLowerCase(),
@@ -86,9 +86,9 @@ export class RequestsExcelService {
 
     const dataRows = rows
       .slice(5)
-      .filter((row) =>
-        row.some(
-          (value) =>
+      .filter((row: any[]) =>
+        (row || []).some(
+          (value: any) =>
             value !== null &&
             value !== undefined &&
             String(value).trim() !== '',
@@ -103,7 +103,7 @@ export class RequestsExcelService {
     // ROW → OBJECT
     // ---------------------------------------------------
 
-    const objects = dataRows.map((row, index) => {
+    const objects = dataRows.map((row: any[], index: number) => {
       const rowNumber = index + 6;
 
       return this.rowToObject(headers, row, rowNumber);
@@ -779,7 +779,7 @@ export class RequestsExcelService {
       return {
         requestType,
         adjustments,
-      } as CreateRequestDto;
+      };
     }
 
     // ---------------------------------------------------

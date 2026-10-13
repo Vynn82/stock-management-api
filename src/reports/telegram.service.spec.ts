@@ -56,7 +56,9 @@ describe('TelegramService', () => {
         {
           provide: SalesReportPdfService,
           useValue: {
-            generateReportPdf: jest.fn().mockResolvedValue(Buffer.from('%PDF-mock-bytes')),
+            generateReportPdf: jest
+              .fn()
+              .mockResolvedValue(Buffer.from('%PDF-mock-bytes')),
           },
         },
       ],
@@ -144,4 +146,3 @@ describe('TelegramService', () => {
     expect(result.pdfSent).toBe(false);
   });
 });
-

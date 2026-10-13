@@ -190,7 +190,7 @@ export class StockAdjustmentsService {
               `${rowLabel}: adjustmentType must be INCREASE or DECREASE`,
             );
           }
-          resolvedType = upperType as StockAdjustmentType;
+          resolvedType = upperType;
           absoluteQty = Math.abs(numQty);
         } else {
           // Infer from sign

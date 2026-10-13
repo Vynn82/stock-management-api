@@ -1,0 +1,685 @@
+{
+  "totalEndpoints": 118,
+  "results": {
+    "src/auth/auth.controller.ts": {
+      "basePath": "auth",
+      "list": [
+        {
+          "method": "POST",
+          "fullPath": "/auth/login",
+          "fnName": "login"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/auth/change-password",
+          "fnName": "changePassword"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/auth/refresh",
+          "fnName": "refresh"
+        }
+      ]
+    },
+    "src/brands/brands.controller.ts": {
+      "basePath": "brands",
+      "list": [
+        {
+          "method": "POST",
+          "fullPath": "/brands",
+          "fnName": "create"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/brands",
+          "fnName": "findAll"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/brands/:id",
+          "fnName": "findOne"
+        },
+        {
+          "method": "PATCH",
+          "fullPath": "/brands/:id",
+          "fnName": "update"
+        },
+        {
+          "method": "PATCH",
+          "fullPath": "/brands/:id/deactivate",
+          "fnName": "deactivate"
+        },
+        {
+          "method": "PATCH",
+          "fullPath": "/brands/:id/activate",
+          "fnName": "activate"
+        }
+      ]
+    },
+    "src/categories/categories.controller.ts": {
+      "basePath": "categories",
+      "list": [
+        {
+          "method": "POST",
+          "fullPath": "/categories",
+          "fnName": "create"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/categories",
+          "fnName": "findAll"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/categories/:id",
+          "fnName": "findOne"
+        },
+        {
+          "method": "PATCH",
+          "fullPath": "/categories/:id",
+          "fnName": "update"
+        },
+        {
+          "method": "DELETE",
+          "fullPath": "/categories/:id",
+          "fnName": "remove"
+        },
+        {
+          "method": "PATCH",
+          "fullPath": "/categories/:id/deactivate",
+          "fnName": "deactivate"
+        },
+        {
+          "method": "PATCH",
+          "fullPath": "/categories/:id/activate",
+          "fnName": "activate"
+        }
+      ]
+    },
+    "src/customer-orders/customer-orders.controller.ts": {
+      "basePath": "customer-orders",
+      "list": [
+        {
+          "method": "POST",
+          "fullPath": "/customer-orders/auth/telegram",
+          "fnName": "authenticateTelegram"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/customer-orders/auth/register",
+          "fnName": "registerCustomer"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/customer-orders",
+          "fnName": "createOrder"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/customer-orders/my-orders",
+          "fnName": "getMyOrders"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/customer-orders/my-orders/:id",
+          "fnName": "getMyOrderById"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/customer-orders/:id/customer-response",
+          "fnName": "customerResponse"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/customer-orders/:id/cancel",
+          "fnName": "customerCancelOrder"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/customer-orders/customers/search",
+          "fnName": "searchCustomers"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/customer-orders/customers",
+          "fnName": "findAllCustomers"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/customer-orders/customers/:id/approve",
+          "fnName": "approveCustomer"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/customer-orders/customers/:id/reject",
+          "fnName": "rejectCustomer"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/customer-orders/staff",
+          "fnName": "createOrderForStaff"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/customer-orders",
+          "fnName": "findAllForStaff"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/customer-orders/:id",
+          "fnName": "findOneForStaff"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/customer-orders/:id/accept",
+          "fnName": "acceptOrder"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/customer-orders/:id/reject",
+          "fnName": "rejectOrder"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/customer-orders/:id/ask-customer",
+          "fnName": "askCustomer"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/customer-orders/:id/confirm-quantity",
+          "fnName": "confirmQuantity"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/customer-orders/:id/process",
+          "fnName": "processOrder"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/customer-orders/:id/out-for-delivery",
+          "fnName": "outForDelivery"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/customer-orders/:id/delivered",
+          "fnName": "markDelivered"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/customer-orders/:id/payment",
+          "fnName": "recordPayment"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/customer-orders/:id/complete",
+          "fnName": "completeOrder"
+        }
+      ]
+    },
+    "src/customer-orders/telegram/telegram-webhook.controller.ts": {
+      "basePath": "telegram",
+      "list": [
+        {
+          "method": "POST",
+          "fullPath": "/telegram/webhook",
+          "fnName": "HttpCode"
+        }
+      ]
+    },
+    "src/mails/mails.controller.ts": {
+      "basePath": "mails",
+      "list": [
+        {
+          "method": "GET",
+          "fullPath": "/mails",
+          "fnName": "findMyMails"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/mails/unread-count",
+          "fnName": "getUnreadCount"
+        },
+        {
+          "method": "PATCH",
+          "fullPath": "/mails/:id/read",
+          "fnName": "markAsRead"
+        }
+      ]
+    },
+    "src/menu/menu.controller.ts": {
+      "basePath": "menu",
+      "list": [
+        {
+          "method": "POST",
+          "fullPath": "/menu",
+          "fnName": "create"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/menu",
+          "fnName": "findAll"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/menu/:id",
+          "fnName": "findOne"
+        },
+        {
+          "method": "PUT",
+          "fullPath": "/menu/:id",
+          "fnName": "update"
+        },
+        {
+          "method": "DELETE",
+          "fullPath": "/menu/:id",
+          "fnName": "remove"
+        }
+      ]
+    },
+    "src/permissions/permissions.controller.ts": {
+      "basePath": "permissions",
+      "list": [
+        {
+          "method": "GET",
+          "fullPath": "/permissions",
+          "fnName": "findAll"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/permissions/:id",
+          "fnName": "findOne"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/permissions",
+          "fnName": "create"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/permissions/bulk",
+          "fnName": "createBulk"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/permissions/resources",
+          "fnName": "RequirePermission"
+        }
+      ]
+    },
+    "src/product-variants/product-variants.controller.ts": {
+      "basePath": "product-variants",
+      "list": [
+        {
+          "method": "POST",
+          "fullPath": "/product-variants",
+          "fnName": "create"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/product-variants",
+          "fnName": "findAll"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/product-variants/:id",
+          "fnName": "findOne"
+        },
+        {
+          "method": "PATCH",
+          "fullPath": "/product-variants/:id",
+          "fnName": "update"
+        },
+        {
+          "method": "DELETE",
+          "fullPath": "/product-variants/:id",
+          "fnName": "remove"
+        },
+        {
+          "method": "PATCH",
+          "fullPath": "/product-variants/:id/deactivate",
+          "fnName": "deactivate"
+        },
+        {
+          "method": "PATCH",
+          "fullPath": "/product-variants/:id/activate",
+          "fnName": "activate"
+        }
+      ]
+    },
+    "src/products/products.controller.ts": {
+      "basePath": "products",
+      "list": [
+        {
+          "method": "POST",
+          "fullPath": "/products",
+          "fnName": "RequireRoles"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/products",
+          "fnName": "findAll"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/products/import/template",
+          "fnName": "downloadTemplate"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/products/export",
+          "fnName": "exportExcel"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/products/import",
+          "fnName": "RequireRoles"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/products/:id",
+          "fnName": "findOne"
+        },
+        {
+          "method": "DELETE",
+          "fullPath": "/products/:id",
+          "fnName": "remove"
+        },
+        {
+          "method": "PATCH",
+          "fullPath": "/products/:id/deactivate",
+          "fnName": "deactivate"
+        },
+        {
+          "method": "PATCH",
+          "fullPath": "/products/:id/activate",
+          "fnName": "activate"
+        }
+      ]
+    },
+    "src/reports/reports.controller.ts": {
+      "basePath": "reports",
+      "list": [
+        {
+          "method": "GET",
+          "fullPath": "/reports/summary",
+          "fnName": "getSummary"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/reports/preview",
+          "fnName": "getTelegramPreview"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/reports/pdf",
+          "fnName": "getPdf"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/reports/telegram/daily",
+          "fnName": "triggerDailyReport"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/reports/telegram/weekly",
+          "fnName": "triggerWeeklyReport"
+        }
+      ]
+    },
+    "src/requests/requests.controller.ts": {
+      "basePath": "requests",
+      "list": [
+        {
+          "method": "GET",
+          "fullPath": "/requests",
+          "fnName": "findAll"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/requests/:id",
+          "fnName": "findOne"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/requests/import/template",
+          "fnName": "generateTemplate"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/requests",
+          "fnName": "UseInterceptors"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/requests/import",
+          "fnName": "UseInterceptors"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/requests/:id/commit",
+          "fnName": "commit"
+        }
+      ]
+    },
+    "src/roles/roles.controller.ts": {
+      "basePath": "roles",
+      "list": [
+        {
+          "method": "GET",
+          "fullPath": "/roles",
+          "fnName": "findAll"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/roles",
+          "fnName": "create"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/roles/:id",
+          "fnName": "findOne"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/roles/:id/permissions",
+          "fnName": "getPermissions"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/roles/:id/permissions",
+          "fnName": "RequirePermission"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/roles/:id/permissions/manage",
+          "fnName": "RequirePermission"
+        },
+        {
+          "method": "DELETE",
+          "fullPath": "/roles/:roleId/permissions/:permissionId",
+          "fnName": "RequirePermission"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/roles/:id/menus",
+          "fnName": "getMenus"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/roles/:id/menus/manage",
+          "fnName": "getMenusForManagement"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/roles/:roleId/menus/:menuId",
+          "fnName": "addMenu"
+        },
+        {
+          "method": "DELETE",
+          "fullPath": "/roles/:roleId/menus/:menuId",
+          "fnName": "removeMenu"
+        }
+      ]
+    },
+    "src/stock/stock.controller.ts": {
+      "basePath": "stock",
+      "list": [
+        {
+          "method": "POST",
+          "fullPath": "/stock",
+          "fnName": "create"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/stock",
+          "fnName": "findAll"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/stock/:id",
+          "fnName": "findOne"
+        },
+        {
+          "method": "PATCH",
+          "fullPath": "/stock/:id",
+          "fnName": "update"
+        },
+        {
+          "method": "DELETE",
+          "fullPath": "/stock/:id",
+          "fnName": "remove"
+        }
+      ]
+    },
+    "src/stock-adjustments/stock-adjustments.controller.ts": {
+      "basePath": "stock-adjustments",
+      "list": [
+        {
+          "method": "POST",
+          "fullPath": "/stock-adjustments",
+          "fnName": "create"
+        },
+        {
+          "method": "POST",
+          "fullPath": "/stock-adjustments/import",
+          "fnName": "importExcel"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/stock-adjustments/import/template",
+          "fnName": "downloadTemplate"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/stock-adjustments",
+          "fnName": "findAll"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/stock-adjustments/:id",
+          "fnName": "findOne"
+        }
+      ]
+    },
+    "src/suppliers/suppliers.controller.ts": {
+      "basePath": "suppliers",
+      "list": [
+        {
+          "method": "POST",
+          "fullPath": "/suppliers",
+          "fnName": "create"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/suppliers",
+          "fnName": "findAll"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/suppliers/:id",
+          "fnName": "findOne"
+        },
+        {
+          "method": "PATCH",
+          "fullPath": "/suppliers/:id",
+          "fnName": "update"
+        },
+        {
+          "method": "PATCH",
+          "fullPath": "/suppliers/:id/deactivate",
+          "fnName": "deactivate"
+        },
+        {
+          "method": "PATCH",
+          "fullPath": "/suppliers/:id/activate",
+          "fnName": "activate"
+        }
+      ]
+    },
+    "src/users/users.controller.ts": {
+      "basePath": "users",
+      "list": [
+        {
+          "method": "POST",
+          "fullPath": "/users",
+          "fnName": "create"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/users/:id/roles",
+          "fnName": "getRoles"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/users",
+          "fnName": "findAll"
+        },
+        {
+          "method": "PUT",
+          "fullPath": "/users/:id/role",
+          "fnName": "RequirePermission"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/users/me",
+          "fnName": "getMe"
+        }
+      ]
+    },
+    "src/warehouses/warehouses.controller.ts": {
+      "basePath": "warehouses",
+      "list": [
+        {
+          "method": "POST",
+          "fullPath": "/warehouses",
+          "fnName": "create"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/warehouses",
+          "fnName": "findAll"
+        },
+        {
+          "method": "GET",
+          "fullPath": "/warehouses/:id",
+          "fnName": "findOne"
+        },
+        {
+          "method": "PATCH",
+          "fullPath": "/warehouses/:id",
+          "fnName": "update"
+        },
+        {
+          "method": "PATCH",
+          "fullPath": "/warehouses/:id/deactivate",
+          "fnName": "deactivate"
+        },
+        {
+          "method": "PATCH",
+          "fullPath": "/warehouses/:id/activate",
+          "fnName": "activate"
+        }
+      ]
+    }
+  }
+}
