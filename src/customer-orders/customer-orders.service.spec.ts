@@ -544,8 +544,9 @@ describe('CustomerOrdersService Business Invariant Tests', () => {
         1,
       );
 
-      expect(result?.source).toBe(OrderSource.STAFF);
-      expect(result?.status).toBe(CustomerOrderStatus.CONFIRMED);
+      expect(result).not.toBeNull();
+      expect(result!.source).toBe(OrderSource.STAFF);
+      expect(result!.status).toBe(CustomerOrderStatus.CONFIRMED);
     });
   });
 });
