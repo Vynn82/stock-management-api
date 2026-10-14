@@ -181,7 +181,9 @@ export class StockAdjustmentsService {
         let absoluteQty: number;
 
         if (item.adjustmentType) {
-          const upperType = String(item.adjustmentType).trim().toUpperCase();
+          const upperType = String(item.adjustmentType)
+            .trim()
+            .toUpperCase() as StockAdjustmentType;
           if (
             upperType !== StockAdjustmentType.INCREASE &&
             upperType !== StockAdjustmentType.DECREASE
@@ -559,7 +561,7 @@ export class StockAdjustmentsService {
   async findAll(
     query?: StockAdjustmentQueryDto,
   ): Promise<PaginatedResult<StockAdjustment>> {
-    const { skip, page, limit } = getPaginationOptions(query);
+    const { skip, limit } = getPaginationOptions(query);
 
     const qb = this.adjustmentRepo
       .createQueryBuilder('sa')

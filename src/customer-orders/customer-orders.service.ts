@@ -728,7 +728,7 @@ export class CustomerOrdersService {
 
       // Telegram notification
       if (order.telegramChatId) {
-        this.telegramBotService.notifyOrderConfirmed(
+        void this.telegramBotService.notifyOrderConfirmed(
           order.telegramChatId,
           order.orderNo,
         );
@@ -845,7 +845,7 @@ export class CustomerOrdersService {
       await manager.save(CustomerOrderMessage, logMsg);
 
       if (order.telegramChatId) {
-        this.telegramBotService.notifyOrderRejected(
+        void this.telegramBotService.notifyOrderRejected(
           order.telegramChatId,
           order.orderNo,
           dto?.reason,
@@ -971,12 +971,12 @@ export class CustomerOrdersService {
 
       if (order.telegramChatId) {
         if (order.status === CustomerOrderStatus.WAITING_STOCK) {
-          this.telegramBotService.sendMessage(
+          void this.telegramBotService.sendMessage(
             order.telegramChatId,
             `⏳ <b>Waiting for Stock</b>\n\nYour order #${order.orderNo} is queued. We will automatically prepare your order as soon as new stock arrives!`,
           );
         } else {
-          this.telegramBotService.notifyOrderConfirmed(
+          void this.telegramBotService.notifyOrderConfirmed(
             order.telegramChatId,
             order.orderNo,
           );
@@ -1112,7 +1112,7 @@ export class CustomerOrdersService {
         await manager.save(CustomerOrder, order);
 
         if (order.telegramChatId) {
-          this.telegramBotService.notifyOrderConfirmed(
+          void this.telegramBotService.notifyOrderConfirmed(
             order.telegramChatId,
             order.orderNo,
           );
@@ -1122,7 +1122,7 @@ export class CustomerOrdersService {
         await manager.save(CustomerOrder, order);
 
         if (order.telegramChatId) {
-          this.telegramBotService.sendMessage(
+          void this.telegramBotService.sendMessage(
             order.telegramChatId,
             `Order #${order.orderNo} has been cancelled per your request.`,
           );
@@ -1192,7 +1192,7 @@ export class CustomerOrdersService {
         }
 
         if (order.telegramChatId) {
-          this.telegramBotService.sendMessage(
+          void this.telegramBotService.sendMessage(
             order.telegramChatId,
             `💬 Message received! Our staff will review your message shortly.`,
           );
@@ -1227,7 +1227,7 @@ export class CustomerOrdersService {
     );
 
     if (order.telegramChatId) {
-      this.telegramBotService.notifyOrderProcessing(
+      void this.telegramBotService.notifyOrderProcessing(
         order.telegramChatId,
         order.orderNo,
       );
@@ -1247,7 +1247,7 @@ export class CustomerOrdersService {
     await this.logStatusChange(order.id, staffId, 'Order is OUT FOR DELIVERY.');
 
     if (order.telegramChatId) {
-      this.telegramBotService.notifyOutForDelivery(
+      void this.telegramBotService.notifyOutForDelivery(
         order.telegramChatId,
         order.orderNo,
         order.deliveryAddress,
@@ -1273,7 +1273,7 @@ export class CustomerOrdersService {
     );
 
     if (order.telegramChatId) {
-      this.telegramBotService.notifyOrderDelivered(
+      void this.telegramBotService.notifyOrderDelivered(
         order.telegramChatId,
         order.orderNo,
         Number(order.totalAmount),
@@ -1336,7 +1336,7 @@ export class CustomerOrdersService {
       await manager.save(CustomerOrderMessage, logMsg);
 
       if (order.telegramChatId) {
-        this.telegramBotService.notifyPaymentReceived(
+        void this.telegramBotService.notifyPaymentReceived(
           order.telegramChatId,
           order.orderNo,
           Number(dto.amount),
@@ -1344,7 +1344,7 @@ export class CustomerOrdersService {
         );
 
         if (order.status === CustomerOrderStatus.COMPLETED) {
-          this.telegramBotService.notifyOrderCompleted(
+          void this.telegramBotService.notifyOrderCompleted(
             order.telegramChatId,
             order.orderNo,
           );
@@ -1381,7 +1381,7 @@ export class CustomerOrdersService {
     );
 
     if (order.telegramChatId) {
-      this.telegramBotService.notifyOrderCompleted(
+      void this.telegramBotService.notifyOrderCompleted(
         order.telegramChatId,
         order.orderNo,
       );
@@ -1472,7 +1472,7 @@ export class CustomerOrdersService {
             where: { id: productId },
           });
           const productName = product?.name || 'Your item';
-          this.telegramBotService.notifyStockAllocated(
+          void this.telegramBotService.notifyStockAllocated(
             item.order.telegramChatId,
             item.order.orderNo,
             productName,

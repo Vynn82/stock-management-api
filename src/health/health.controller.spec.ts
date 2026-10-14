@@ -5,7 +5,6 @@ import { ServiceUnavailableException } from '@nestjs/common';
 
 describe('HealthController', () => {
   let controller: HealthController;
-  let service: HealthService;
 
   const mockHealthService = {
     checkSystem: jest.fn().mockResolvedValue({
@@ -45,7 +44,6 @@ describe('HealthController', () => {
     }).compile();
 
     controller = module.get<HealthController>(HealthController);
-    service = module.get<HealthService>(HealthService);
   });
 
   it('should be defined', () => {

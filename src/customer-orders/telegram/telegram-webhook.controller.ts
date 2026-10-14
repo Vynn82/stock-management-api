@@ -66,7 +66,6 @@ export class TelegramWebhookController {
     const callbackId = callbackQuery.id;
     const from = callbackQuery.from;
     const data = callbackQuery.data as string;
-    const chatId = callbackQuery.message?.chat?.id;
 
     if (!from || !data) {
       await this.telegramBotService.answerCallbackQuery(callbackId);

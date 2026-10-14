@@ -1,10 +1,4 @@
-import {
-  MigrationInterface,
-  QueryRunner,
-  Table,
-  TableForeignKey,
-  TableIndex,
-} from 'typeorm';
+import { MigrationInterface, QueryRunner, Table, TableIndex } from 'typeorm';
 
 export class CreateCustomerOrdersTables1789500000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {

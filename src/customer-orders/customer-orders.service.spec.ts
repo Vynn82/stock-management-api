@@ -509,7 +509,7 @@ describe('CustomerOrdersService Business Invariant Tests', () => {
       );
 
       dataSource.manager.findOne.mockImplementation(
-        (entity: any, options: any) => {
+        (entity: any, _options: any) => {
           if (entity === Warehouse) return Promise.resolve(mockWarehouse);
           if (entity === Product) return Promise.resolve(mockProduct);
           if (entity === CustomerOrder) {

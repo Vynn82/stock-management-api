@@ -21,7 +21,6 @@ import { Warehouse } from '../warehouses/entities/warehouse.entity';
 import { ProductDirectCreateBatchItem } from './products-excel.service';
 import { ProductFilterDto } from './dto/product-filter.dto';
 import {
-  PaginationDto,
   createPaginatedResult,
   getPaginationOptions,
 } from '../common/pagination';
@@ -251,7 +250,7 @@ export class ProductsService {
 
   async createManyDirect(
     batchItems: ProductDirectCreateBatchItem[],
-    userId?: string,
+    _userId?: string,
   ) {
     if (!batchItems || batchItems.length === 0) {
       throw new BadRequestException('No products to import');

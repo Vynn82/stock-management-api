@@ -79,21 +79,23 @@ describe('TelegramService', () => {
   it('should send both Telegram summary message and PDF document successfully', async () => {
     const mockFetch = jest
       .spyOn(global, 'fetch')
-      .mockImplementation(async (url: any) => {
+      .mockImplementation((url: any) => {
         const urlStr = url.toString();
         if (urlStr.includes('/sendMessage')) {
-          return {
+          return Promise.resolve({
             ok: true,
-            json: async () => ({ ok: true, result: { message_id: 101 } }),
-          } as any;
+            json: () =>
+              Promise.resolve({ ok: true, result: { message_id: 101 } }),
+          } as any);
         }
         if (urlStr.includes('/sendDocument')) {
-          return {
+          return Promise.resolve({
             ok: true,
-            json: async () => ({ ok: true, result: { message_id: 102 } }),
-          } as any;
+            json: () =>
+              Promise.resolve({ ok: true, result: { message_id: 102 } }),
+          } as any);
         }
-        return { ok: false } as any;
+        return Promise.resolve({ ok: false } as any);
       });
 
     const result = await service.sendReport(mockReport);
@@ -109,11 +111,11 @@ describe('TelegramService', () => {
       .spyOn(pdfService, 'generateReportPdf')
       .mockRejectedValueOnce(new Error('PDF generation engine failed'));
 
-    jest.spyOn(global, 'fetch').mockImplementation(async () => {
-      return {
+    jest.spyOn(global, 'fetch').mockImplementation(() => {
+      return Promise.resolve({
         ok: true,
-        json: async () => ({ ok: true, result: { message_id: 101 } }),
-      } as any;
+        json: () => Promise.resolve({ ok: true, result: { message_id: 101 } }),
+      } as any);
     });
 
     const result = await service.sendReport(mockReport);
@@ -123,21 +125,23 @@ describe('TelegramService', () => {
   });
 
   it('should still succeed with summary delivery if sendDocument fails', async () => {
-    jest.spyOn(global, 'fetch').mockImplementation(async (url: any) => {
+    jest.spyOn(global, 'fetch').mockImplementation((url: any) => {
       const urlStr = url.toString();
       if (urlStr.includes('/sendMessage')) {
-        return {
+        return Promise.resolve({
           ok: true,
-          json: async () => ({ ok: true, result: { message_id: 101 } }),
-        } as any;
+          json: () =>
+            Promise.resolve({ ok: true, result: { message_id: 101 } }),
+        } as any);
       }
       if (urlStr.includes('/sendDocument')) {
-        return {
+        return Promise.resolve({
           ok: false,
-          json: async () => ({ ok: false, description: 'File too large' }),
-        } as any;
+          json: () =>
+            Promise.resolve({ ok: false, description: 'File too large' }),
+        } as any);
       }
-      return { ok: false } as any;
+      return Promise.resolve({ ok: false } as any);
     });
 
     const result = await service.sendReport(mockReport);

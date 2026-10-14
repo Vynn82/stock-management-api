@@ -21,15 +21,6 @@ import { CustomerTelegramAccount } from '../entities/customer-telegram-account.e
 import { CustomerStatus } from '../enums/customer-status.enum';
 import { CustomerJwtGuard } from '../guards/customer-jwt.guard';
 import { CustomerOrdersService } from '../customer-orders.service';
-import { CustomerOrder } from '../entities/customer-order.entity';
-import { CustomerOrderItem } from '../entities/customer-order-item.entity';
-import { CustomerOrderMessage } from '../entities/customer-order-message.entity';
-import { CustomerOrderPayment } from '../entities/customer-order-payment.entity';
-import { Product } from '../../products/entities/product.entity';
-import { ProductVariant } from '../../product-variants/entities/product-variant.entity';
-import { Stock } from '../../stock/entities/stock.entity';
-import { Warehouse } from '../../warehouses/entities/warehouse.entity';
-import { MailsService } from '../../mails/mails.service';
 
 const TEST_BOT_TOKEN = 'test_telegram_bot_token_123456';
 
@@ -163,7 +154,7 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
   it('Case 2: New user registers successfully -> status ACTIVE with access token', async () => {
     const initData = createValidInitData({ id: 1002, first_name: 'Alice' });
 
-    mockManager.findOne.mockImplementation((entity: any) => {
+    mockManager.findOne.mockImplementation((_entity: any) => {
       // No existing telegram account, phone, or company
       return Promise.resolve(null);
     });

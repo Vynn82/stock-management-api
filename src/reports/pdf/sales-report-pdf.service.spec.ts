@@ -2,8 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { SalesReportPdfService } from './sales-report-pdf.service';
 import { SalesReport } from '../interfaces/report.interface';
-import * as fs from 'fs';
-import * as path from 'path';
 
 describe('SalesReportPdfService', () => {
   let service: SalesReportPdfService;

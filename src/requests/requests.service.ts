@@ -15,9 +15,6 @@ import {
 } from 'typeorm';
 
 import { CreateRequestDto } from './dto/create-request.dto';
-import { CreateRequestProductDto } from './dto/create-request-product.dto';
-import { CreateRequestVariantDto } from './dto/create-request-variant.dto';
-import { CreateRequestStockDto } from './dto/create-request-stock.dto';
 import { CommitAction, CommitRequestDto } from './dto/commit-request.dto';
 
 import { Request } from './entities/request.entity';
@@ -532,12 +529,7 @@ export class RequestsService {
       );
 
       // Create stock
-      const stocks = await this.createStocksFromRequest(
-        manager,
-        request,
-        product,
-        variants,
-      );
+      await this.createStocksFromRequest(manager, request, product, variants);
 
       request.status = RequestStatus.APPROVED;
 
