@@ -66,7 +66,9 @@ async function verifyAll17Modules() {
 
   const server = app.getHttpServer();
   const dataSource = app.get(DataSource);
-  const botToken = process.env.TELEGRAM_BOT_TOKEN || '8818101242:AAHZQk1kXxecy6FLyObRoJiwxXne-WOfZMY';
+  const botToken = (process.env.TELEGRAM_BOT_TOKEN || '')
+    .replace(/^["']|["']$/g, '')
+    .trim();
 
   try {
     // -------------------------------------------------------------

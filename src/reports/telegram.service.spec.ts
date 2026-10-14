@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { TelegramService } from './telegram.service';
 import { SalesReportPdfService } from './pdf/sales-report-pdf.service';
 import { SalesReport } from './interfaces/report.interface';
+import * as dotenv from 'dotenv';
+dotenv.config();
 
 describe('TelegramService', () => {
   let service: TelegramService;
@@ -47,8 +49,14 @@ describe('TelegramService', () => {
           provide: ConfigService,
           useValue: {
             get: jest.fn((key: string) => {
-              if (key === 'TELEGRAM_BOT_TOKEN') return 'test_bot_token';
-              if (key === 'TELEGRAM_CHAT_ID') return '-123456789';
+              if (key === 'TELEGRAM_BOT_TOKEN')
+                return (process.env.TELEGRAM_BOT_TOKEN || '')
+                  .replace(/^["']|["']$/g, '')
+                  .trim();
+              if (key === 'TELEGRAM_CHAT_ID')
+                return (process.env.TELEGRAM_CHAT_ID || '')
+                  .replace(/^["']|["']$/g, '')
+                  .trim();
               return null;
             }),
           },

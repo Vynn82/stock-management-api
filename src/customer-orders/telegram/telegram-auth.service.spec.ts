@@ -21,8 +21,13 @@ import { CustomerTelegramAccount } from '../entities/customer-telegram-account.e
 import { CustomerStatus } from '../enums/customer-status.enum';
 import { CustomerJwtGuard } from '../guards/customer-jwt.guard';
 import { CustomerOrdersService } from '../customer-orders.service';
+import * as dotenv from 'dotenv';
+dotenv.config();
 
-const TEST_BOT_TOKEN = 'test_telegram_bot_token_123456';
+const TEST_BOT_TOKEN =
+  (process.env.TELEGRAM_BOT_TOKEN || '')
+    .replace(/^["']|["']$/g, '')
+    .trim() || 'test_telegram_bot_token_123456';
 
 function createValidInitData(
   user: any,

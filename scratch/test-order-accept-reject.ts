@@ -89,7 +89,9 @@ async function testOrderAcceptAndReject() {
     // 2. Register Active Customer
     console.log('\n▶ [2/4] Registering Customer (Status is directly ACTIVE)...');
     const custTgId = Date.now().toString().slice(-8);
-    const botToken = process.env.TELEGRAM_BOT_TOKEN || '8818101242:AAHZQk1kXxecy6FLyObRoJiwxXne-WOfZMY';
+    const botToken = (process.env.TELEGRAM_BOT_TOKEN || '')
+      .replace(/^["']|["']$/g, '')
+      .trim();
     
     const userJson = JSON.stringify({ id: Number(custTgId), first_name: 'Test', username: `user_${custTgId}` });
     const authDate = Math.floor(Date.now() / 1000).toString();
