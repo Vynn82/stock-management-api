@@ -25,9 +25,8 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 const TEST_BOT_TOKEN =
-  (process.env.TELEGRAM_BOT_TOKEN || '')
-    .replace(/^["']|["']$/g, '')
-    .trim() || 'test_telegram_bot_token_123456';
+  (process.env.TELEGRAM_BOT_TOKEN || '').replace(/^["']|["']$/g, '').trim() ||
+  'test_telegram_bot_token_123456';
 
 function createValidInitData(
   user: any,

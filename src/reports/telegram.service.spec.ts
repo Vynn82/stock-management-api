@@ -50,13 +50,17 @@ describe('TelegramService', () => {
           useValue: {
             get: jest.fn((key: string) => {
               if (key === 'TELEGRAM_BOT_TOKEN')
-                return (process.env.TELEGRAM_BOT_TOKEN || '')
-                  .replace(/^["']|["']$/g, '')
-                  .trim();
+                return (
+                  (process.env.TELEGRAM_BOT_TOKEN || '')
+                    .replace(/^["']|["']$/g, '')
+                    .trim() || 'test_bot_token'
+                );
               if (key === 'TELEGRAM_CHAT_ID')
-                return (process.env.TELEGRAM_CHAT_ID || '')
-                  .replace(/^["']|["']$/g, '')
-                  .trim();
+                return (
+                  (process.env.TELEGRAM_CHAT_ID || '')
+                    .replace(/^["']|["']$/g, '')
+                    .trim() || '-123456789'
+                );
               return null;
             }),
           },
