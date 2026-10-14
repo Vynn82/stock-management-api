@@ -43,16 +43,29 @@ describe('CustomerOrdersService Business Invariant Tests', () => {
         findOne: jest.fn(),
         find: jest.fn(),
         create: jest.fn((entity, data) => ({ ...data })),
-        save: jest.fn((entity, data) => Promise.resolve({ id: 'saved-id', ...data })),
+        save: jest.fn((entity, data) =>
+          Promise.resolve({ id: 'saved-id', ...data }),
+        ),
         createQueryBuilder: jest.fn(),
       },
     };
 
     customerRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
-    orderRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
+    orderRepo = {
+      findOne: jest.fn(),
+      find: jest.fn(),
+      create: jest.fn(),
+      save: jest.fn(),
+    };
     itemRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
-    messageRepo = { create: jest.fn((e) => e), save: jest.fn((e) => Promise.resolve(e)) };
-    paymentRepo = { create: jest.fn((e) => e), save: jest.fn((e) => Promise.resolve(e)) };
+    messageRepo = {
+      create: jest.fn((e) => e),
+      save: jest.fn((e) => Promise.resolve(e)),
+    };
+    paymentRepo = {
+      create: jest.fn((e) => e),
+      save: jest.fn((e) => Promise.resolve(e)),
+    };
     productRepo = { findOne: jest.fn() };
     variantRepo = { findOne: jest.fn() };
     stockRepo = { findOne: jest.fn(), save: jest.fn() };
@@ -84,8 +97,14 @@ describe('CustomerOrdersService Business Invariant Tests', () => {
         { provide: getRepositoryToken(Customer), useValue: customerRepo },
         { provide: getRepositoryToken(CustomerOrder), useValue: orderRepo },
         { provide: getRepositoryToken(CustomerOrderItem), useValue: itemRepo },
-        { provide: getRepositoryToken(CustomerOrderMessage), useValue: messageRepo },
-        { provide: getRepositoryToken(CustomerOrderPayment), useValue: paymentRepo },
+        {
+          provide: getRepositoryToken(CustomerOrderMessage),
+          useValue: messageRepo,
+        },
+        {
+          provide: getRepositoryToken(CustomerOrderPayment),
+          useValue: paymentRepo,
+        },
         { provide: getRepositoryToken(Product), useValue: productRepo },
         { provide: getRepositoryToken(ProductVariant), useValue: variantRepo },
         { provide: getRepositoryToken(Stock), useValue: stockRepo },
@@ -243,7 +262,10 @@ describe('CustomerOrdersService Business Invariant Tests', () => {
       expect(mockOrder.status).toBe(CustomerOrderStatus.CONFIRMED);
       expect(mockOrder.items[0].approvedQuantity).toBe(50);
       expect(mockOrder.items[0].waitingQuantity).toBe(0);
-      expect(telegramBotService.notifyOrderConfirmed).toHaveBeenCalledWith('12345', mockOrder.orderNo);
+      expect(telegramBotService.notifyOrderConfirmed).toHaveBeenCalledWith(
+        '12345',
+        mockOrder.orderNo,
+      );
     });
   });
 
@@ -311,10 +333,15 @@ describe('CustomerOrdersService Business Invariant Tests', () => {
       expect(mockOrder.items[0].approvedQuantity).toBe(0);
       expect(mockOrder.items[0].waitingQuantity).toBe(200);
       expect(mockOrder.items[0].status).toBe('WAITING_STOCK');
-      expect(dataSource.manager.save).toHaveBeenCalledWith(CustomerOrder, mockOrder);
+      expect(dataSource.manager.save).toHaveBeenCalledWith(
+        CustomerOrder,
+        mockOrder,
+      );
       expect(telegramBotService.sendMessage).toHaveBeenCalledWith(
         '12345',
-        expect.stringContaining('You chose to wait for all 200 units. Your order #ORD-20261005-2001 is queued and will be fulfilled as soon as stock arrives.'),
+        expect.stringContaining(
+          'You chose to wait for all 200 units. Your order #ORD-20261005-2001 is queued and will be fulfilled as soon as stock arrives.',
+        ),
       );
     });
   });
@@ -477,24 +504,28 @@ describe('CustomerOrdersService Business Invariant Tests', () => {
         getOne: jest.fn().mockResolvedValue(mockStock),
       };
 
-      dataSource.manager.createQueryBuilder.mockReturnValue(mockStockQueryBuilder);
+      dataSource.manager.createQueryBuilder.mockReturnValue(
+        mockStockQueryBuilder,
+      );
 
-      dataSource.manager.findOne.mockImplementation((entity: any, options: any) => {
-        if (entity === Warehouse) return Promise.resolve(mockWarehouse);
-        if (entity === Product) return Promise.resolve(mockProduct);
-        if (entity === CustomerOrder) {
-          return Promise.resolve({
-            id: 'ord-staff-1',
-            orderNo: 'ORD-20261004-9999',
-            status: CustomerOrderStatus.CONFIRMED,
-            source: OrderSource.STAFF,
-            createdByStaffId: 'staff-user-1',
-            totalAmount: 75.0,
-            items: [],
-          });
-        }
-        return Promise.resolve(null);
-      });
+      dataSource.manager.findOne.mockImplementation(
+        (entity: any, options: any) => {
+          if (entity === Warehouse) return Promise.resolve(mockWarehouse);
+          if (entity === Product) return Promise.resolve(mockProduct);
+          if (entity === CustomerOrder) {
+            return Promise.resolve({
+              id: 'ord-staff-1',
+              orderNo: 'ORD-20261004-9999',
+              status: CustomerOrderStatus.CONFIRMED,
+              source: OrderSource.STAFF,
+              createdByStaffId: 'staff-user-1',
+              totalAmount: 75.0,
+              items: [],
+            });
+          }
+          return Promise.resolve(null);
+        },
+      );
 
       const result = await service.createOrderForStaff('staff-user-1', {
         customerId: 'cust-active',

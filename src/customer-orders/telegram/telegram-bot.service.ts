@@ -176,7 +176,10 @@ export class TelegramBotService {
 
     if (proposedQuantity !== undefined && proposedQuantity > 0) {
       const availQty = proposedQuantity;
-      const totalQty = requestedQuantity && requestedQuantity > availQty ? requestedQuantity : availQty;
+      const totalQty =
+        requestedQuantity && requestedQuantity > availQty
+          ? requestedQuantity
+          : availQty;
       const itemSuffix = itemId ? `:${itemId}` : '';
 
       buttons.push([
@@ -352,7 +355,10 @@ export class TelegramBotService {
     ]);
   }
 
-  async notifyCustomerApproved(chatId: string, companyName?: string): Promise<void> {
+  async notifyCustomerApproved(
+    chatId: string,
+    companyName?: string,
+  ): Promise<void> {
     const miniAppUrl = this.getMiniAppUrl();
     const companyStr = companyName ? ` for <b>${companyName}</b>` : '';
     const text =
@@ -388,4 +394,3 @@ export class TelegramBotService {
     ]);
   }
 }
-

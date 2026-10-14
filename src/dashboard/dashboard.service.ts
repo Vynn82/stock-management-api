@@ -122,7 +122,15 @@ export class DashboardService {
       0,
     );
     const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const monthStart = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      1,
+      0,
+      0,
+      0,
+      0,
+    );
 
     // =========================================================================
     // 1. INVENTORY KPIS
@@ -256,10 +264,7 @@ export class DashboardService {
       .select('COALESCE(SUM(o.total_amount), 0)', 'revenue')
       .where('o.payment_status != :paid', { paid: PaymentStatus.PAID })
       .andWhere('o.status NOT IN (:...excluded)', {
-        excluded: [
-          CustomerOrderStatus.CANCELLED,
-          CustomerOrderStatus.REJECTED,
-        ],
+        excluded: [CustomerOrderStatus.CANCELLED, CustomerOrderStatus.REJECTED],
       })
       .getRawOne();
 
@@ -430,8 +435,9 @@ export class DashboardService {
       if (existing) {
         existing.ordersCount += 1;
         existing.revenue =
-          Math.round((existing.revenue + Number(order.totalAmount || 0)) * 100) /
-          100;
+          Math.round(
+            (existing.revenue + Number(order.totalAmount || 0)) * 100,
+          ) / 100;
 
         let itemsCount = 0;
         for (const item of order.items || []) {
@@ -526,10 +532,7 @@ export class DashboardService {
       .addSelect('COALESCE(SUM(item.requested_quantity), 0)', 'unitsSold')
       .addSelect('COALESCE(SUM(item.subtotal), 0)', 'revenue')
       .where('order.status NOT IN (:...excluded)', {
-        excluded: [
-          CustomerOrderStatus.CANCELLED,
-          CustomerOrderStatus.REJECTED,
-        ],
+        excluded: [CustomerOrderStatus.CANCELLED, CustomerOrderStatus.REJECTED],
       })
       .groupBy('product.id')
       .addGroupBy('product.code')

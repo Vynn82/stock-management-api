@@ -8,6 +8,7 @@ import { Repository } from 'typeorm';
 import * as bwipjs from 'bwip-js';
 import * as QRCode from 'qrcode';
 import PDFDocument from 'pdfkit';
+import type { Response } from 'express';
 
 import { Product } from '../products/entities/product.entity';
 import { ProductVariant } from '../product-variants/entities/product-variant.entity';
@@ -83,7 +84,8 @@ export class BarcodesService {
     }
 
     // Fallback in rare collision scenario
-    const base12 = `${prefix.slice(0, 3)}${Date.now().toString().slice(-9)}`.slice(0, 12);
+    const base12 =
+      `${prefix.slice(0, 3)}${Date.now().toString().slice(-9)}`.slice(0, 12);
     return `${base12}${this.calculateEan13CheckDigit(base12)}`;
   }
 
@@ -119,12 +121,14 @@ export class BarcodesService {
   /**
    * Generates a 1D Barcode as an SVG string using bwip-js.
    */
-  async generateBarcodeSvg(
+  generateBarcodeSvg(
     text: string,
     options?: Partial<GenerateBarcodeQueryDto>,
   ): Promise<string> {
     if (!text || !text.trim()) {
-      throw new BadRequestException('Barcode text cannot be empty');
+      return Promise.reject(
+        new BadRequestException('Barcode text cannot be empty'),
+      );
     }
 
     const bcid = options?.bcid || BarcodeSymbology.CODE128;
@@ -132,14 +136,16 @@ export class BarcodesService {
     const height = options?.height ?? 10;
     const includetext = options?.includetext !== false;
 
-    return bwipjs.toSVG({
-      bcid,
-      text: text.trim(),
-      scale,
-      height,
-      includetext,
-      textxalign: 'center',
-    });
+    return Promise.resolve(
+      bwipjs.toSVG({
+        bcid,
+        text: text.trim(),
+        scale,
+        height,
+        includetext,
+        textxalign: 'center',
+      }),
+    );
   }
 
   /**
@@ -459,7 +465,9 @@ export class BarcodesService {
         costPrice: Number(product.costPrice),
         sellingPrice: Number(product.sellingPrice),
         minimumStock: Number(product.minimumStock),
-        maximumStock: product.maximumStock ? Number(product.maximumStock) : null,
+        maximumStock: product.maximumStock
+          ? Number(product.maximumStock)
+          : null,
         hasVariants: product.hasVariants,
         image: product.image,
         isActive: product.isActive,
@@ -519,7 +527,7 @@ export class BarcodesService {
       });
 
       const buffers: Buffer[] = [];
-      doc.on('data', (chunk) => buffers.push(chunk));
+      doc.on('data', (chunk: Buffer) => buffers.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(buffers)));
       doc.on('error', (err) => reject(err));
 
@@ -543,7 +551,11 @@ export class BarcodesService {
           .fontSize(7.5)
           .font('Helvetica-Bold')
           .fillColor('#111827')
-          .text(product.name, 6, 13, { width: 148, height: 16, ellipsis: true });
+          .text(product.name, 6, 13, {
+            width: 148,
+            height: 16,
+            ellipsis: true,
+          });
 
         // Left: 1D Barcode
         doc.image(barcodePng, 6, 30, { width: 95, height: 38 });
@@ -617,7 +629,7 @@ export class BarcodesService {
       });
 
       const buffers: Buffer[] = [];
-      doc.on('data', (chunk) => buffers.push(chunk));
+      doc.on('data', (chunk: Buffer) => buffers.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(buffers)));
       doc.on('error', (err) => reject(err));
 
@@ -641,7 +653,11 @@ export class BarcodesService {
           .fontSize(7.5)
           .font('Helvetica-Bold')
           .fillColor('#111827')
-          .text(variant.name, 6, 13, { width: 148, height: 16, ellipsis: true });
+          .text(variant.name, 6, 13, {
+            width: 148,
+            height: 16,
+            ellipsis: true,
+          });
 
         // Left: 1D Barcode
         doc.image(barcodePng, 6, 30, { width: 95, height: 38 });
@@ -692,18 +708,19 @@ export class BarcodesService {
   async stream1dBarcode(
     text: string,
     query: Partial<GenerateBarcodeQueryDto>,
-    res: any,
+    res: Response,
   ): Promise<void> {
     if (query?.format === BarcodeFormat.SVG) {
       const svg = await this.generateBarcodeSvg(text, query);
       res.setHeader('Content-Type', 'image/svg+xml');
-      return res.send(svg);
+      res.send(svg);
+      return;
     }
 
     const png = await this.generateBarcodePng(text, query);
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Content-Length', png.length.toString());
-    return res.end(png);
+    res.end(png);
   }
 
   /**
@@ -712,18 +729,19 @@ export class BarcodesService {
   async streamQrCode(
     text: string,
     query: Partial<GenerateQrQueryDto>,
-    res: any,
+    res: Response,
   ): Promise<void> {
     if (query?.format === BarcodeFormat.SVG) {
       const svg = await this.generateQrSvg(text, query);
       res.setHeader('Content-Type', 'image/svg+xml');
-      return res.send(svg);
+      res.send(svg);
+      return;
     }
 
     const png = await this.generateQrPng(text, query);
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Content-Length', png.length.toString());
-    return res.end(png);
+    res.end(png);
   }
 
   /**
@@ -732,7 +750,7 @@ export class BarcodesService {
   async streamProductBarcode(
     id: string,
     query: Partial<GenerateBarcodeQueryDto>,
-    res: any,
+    res: Response,
   ): Promise<void> {
     const product = await this.findProductByIdOrCode(id);
     const barcodeText = product.barcode || product.sku || product.code;
@@ -745,7 +763,7 @@ export class BarcodesService {
   async streamProductQr(
     id: string,
     query: Partial<GenerateQrQueryDto>,
-    res: any,
+    res: Response,
   ): Promise<void> {
     const product = await this.findProductByIdOrCode(id);
     const qrData = JSON.stringify({
@@ -765,7 +783,7 @@ export class BarcodesService {
   async streamProductLabel(
     id: string,
     query: LabelQueryDto,
-    res: any,
+    res: Response,
   ): Promise<void> {
     const pdfBuffer = await this.generateProductLabelPdf(id, query);
     const filename = `product-label-${id}.pdf`;
@@ -775,7 +793,7 @@ export class BarcodesService {
       'Content-Disposition': `inline; filename="${filename}"`,
       'Content-Length': pdfBuffer.length.toString(),
     });
-    return res.end(pdfBuffer);
+    res.end(pdfBuffer);
   }
 
   /**
@@ -784,7 +802,7 @@ export class BarcodesService {
   async streamVariantBarcode(
     id: string,
     query: Partial<GenerateBarcodeQueryDto>,
-    res: any,
+    res: Response,
   ): Promise<void> {
     const variant = await this.findVariantByIdOrCode(id);
     const barcodeText = variant.barcode || variant.sku || variant.code;
@@ -797,7 +815,7 @@ export class BarcodesService {
   async streamVariantQr(
     id: string,
     query: Partial<GenerateQrQueryDto>,
-    res: any,
+    res: Response,
   ): Promise<void> {
     const variant = await this.findVariantByIdOrCode(id);
     const qrData = JSON.stringify({
@@ -818,7 +836,7 @@ export class BarcodesService {
   async streamVariantLabel(
     id: string,
     query: LabelQueryDto,
-    res: any,
+    res: Response,
   ): Promise<void> {
     const pdfBuffer = await this.generateVariantLabelPdf(id, query);
     const filename = `variant-label-${id}.pdf`;
@@ -828,6 +846,6 @@ export class BarcodesService {
       'Content-Disposition': `inline; filename="${filename}"`,
       'Content-Length': pdfBuffer.length.toString(),
     });
-    return res.end(pdfBuffer);
+    res.end(pdfBuffer);
   }
 }

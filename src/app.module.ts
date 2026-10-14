@@ -28,7 +28,6 @@ import { CustomerOrdersModule } from './customer-orders/customer-orders.module';
 import { HealthModule } from './health/health.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 
-
 @Module({
   imports: [
     ScheduleModule.forRoot(),
@@ -102,7 +101,6 @@ import { DashboardModule } from './dashboard/dashboard.module';
     LoggerModule,
     HealthModule,
     DashboardModule,
-
   ],
 })
 export class AppModule implements NestModule {
@@ -110,4 +108,3 @@ export class AppModule implements NestModule {
     consumer.apply(HttpLoggerMiddleware).forRoutes('*');
   }
 }
-

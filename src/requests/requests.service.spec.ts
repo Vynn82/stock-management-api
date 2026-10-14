@@ -5,6 +5,9 @@ import { RequestsService } from './requests.service';
 import { Request } from './entities/request.entity';
 import { User } from '../users/entities/user.entity';
 import { MailsService } from '../mails/mails.service';
+import { RequestsExcelService } from './requests-excel.service';
+import { RequestImportTemplateService } from './request-import-template.service';
+import { BarcodesService } from '../barcodes/barcodes.service';
 
 describe('RequestsService', () => {
   let service: RequestsService;
@@ -15,7 +18,12 @@ describe('RequestsService', () => {
         RequestsService,
         {
           provide: getRepositoryToken(Request),
-          useValue: { find: jest.fn(), findOne: jest.fn(), create: jest.fn(), save: jest.fn() },
+          useValue: {
+            find: jest.fn(),
+            findOne: jest.fn(),
+            create: jest.fn(),
+            save: jest.fn(),
+          },
         },
         {
           provide: getRepositoryToken(User),
@@ -24,6 +32,18 @@ describe('RequestsService', () => {
         {
           provide: MailsService,
           useValue: { sendMail: jest.fn() },
+        },
+        {
+          provide: RequestsExcelService,
+          useValue: { importExcel: jest.fn() },
+        },
+        {
+          provide: RequestImportTemplateService,
+          useValue: { generateTemplate: jest.fn() },
+        },
+        {
+          provide: BarcodesService,
+          useValue: { lookupByBarcode: jest.fn() },
         },
         {
           provide: DataSource,

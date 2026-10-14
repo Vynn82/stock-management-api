@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { ProductVariantsService } from './product-variants.service';
 import { ProductVariant } from './entities/product-variant.entity';
 import { Product } from '../products/entities/product.entity';
+import { BarcodesService } from '../barcodes/barcodes.service';
 
 describe('ProductVariantsService', () => {
   let service: ProductVariantsService;
@@ -25,6 +26,14 @@ describe('ProductVariantsService', () => {
           provide: getRepositoryToken(Product),
           useValue: {
             findOne: jest.fn(),
+          },
+        },
+        {
+          provide: BarcodesService,
+          useValue: {
+            lookupByBarcode: jest.fn(),
+            generateBarcodePng: jest.fn(),
+            generateQrPng: jest.fn(),
           },
         },
       ],

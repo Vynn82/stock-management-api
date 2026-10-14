@@ -99,7 +99,6 @@ export class RequestsController {
     );
   }
 
-
   /**
    * Commit, approve, or reject a request.
    */

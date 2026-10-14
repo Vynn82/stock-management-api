@@ -169,8 +169,15 @@ export class CustomerOrdersService {
       }
 
       // 3. Create the order entity
-      const telegramUserId = customer.telegramUserId || customer.telegramAccounts?.[0]?.telegramUserId || '';
-      const telegramChatId = customer.telegramChatId || customer.telegramAccounts?.[0]?.telegramChatId || (telegramUserId || null);
+      const telegramUserId =
+        customer.telegramUserId ||
+        customer.telegramAccounts?.[0]?.telegramUserId ||
+        '';
+      const telegramChatId =
+        customer.telegramChatId ||
+        customer.telegramAccounts?.[0]?.telegramChatId ||
+        telegramUserId ||
+        null;
 
       const newOrder = manager.create(CustomerOrder, {
         orderNo,
@@ -397,7 +404,8 @@ export class CustomerOrdersService {
       const telegramChatId =
         customer.telegramChatId ||
         customer.telegramAccounts?.[0]?.telegramChatId ||
-        (telegramUserId || null);
+        telegramUserId ||
+        null;
 
       const newOrder = manager.create(CustomerOrder, {
         orderNo,
@@ -410,7 +418,8 @@ export class CustomerOrdersService {
         deliveryStatus: DeliveryStatus.PENDING,
         paymentStatus: PaymentStatus.UNPAID,
         totalAmount: Number(totalAmount.toFixed(2)),
-        deliveryAddress: dto.deliveryAddress?.trim() || customer.address || null,
+        deliveryAddress:
+          dto.deliveryAddress?.trim() || customer.address || null,
         remark: dto.remark?.trim() || null,
       });
 

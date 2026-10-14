@@ -12,7 +12,12 @@ describe('SessionsService', () => {
         SessionsService,
         {
           provide: getRepositoryToken(Session),
-          useValue: { find: jest.fn(), findOne: jest.fn(), create: jest.fn(), save: jest.fn() },
+          useValue: {
+            find: jest.fn(),
+            findOne: jest.fn(),
+            create: jest.fn(),
+            save: jest.fn(),
+          },
         },
       ],
     }).compile();

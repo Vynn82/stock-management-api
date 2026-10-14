@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class UpdateCustomerStatusDefaultsAndActivateExisting1789800000000
-  implements MigrationInterface
-{
+export class UpdateCustomerStatusDefaultsAndActivateExisting1789800000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // 1. Update default values on customers table
     await queryRunner.query(

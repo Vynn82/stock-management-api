@@ -9,8 +9,7 @@ export class HttpLoggerMiddleware implements NestMiddleware {
     const start = Date.now();
 
     // 1. Establish unique Request ID for end-to-end tracing
-    const requestId =
-      (req.headers['x-request-id'] as string) || randomUUID();
+    const requestId = (req.headers['x-request-id'] as string) || randomUUID();
     (req as any).requestId = requestId;
     res.setHeader('X-Request-Id', requestId);
 
@@ -24,7 +23,9 @@ export class HttpLoggerMiddleware implements NestMiddleware {
 
       // Capture authenticated user context if present
       const user = (req as any).user;
-      const userId = user ? (user.staffId || user.sub || user.telegramUserId || user.id) : 'anonymous';
+      const userId = user
+        ? user.staffId || user.sub || user.telegramUserId || user.id
+        : 'anonymous';
 
       // Sanitize request body if present (hide sensitive data)
       const sanitizedBody = this.sanitizeBody(req.body);
@@ -60,11 +61,21 @@ export class HttpLoggerMiddleware implements NestMiddleware {
 
   private sanitizeBody(body: any): any {
     if (!body || typeof body !== 'object') return body;
-    const sensitiveKeys = ['password', 'passwordHash', 'token', 'accessToken', 'refreshToken', 'initData', 'secret'];
+    const sensitiveKeys = [
+      'password',
+      'passwordHash',
+      'token',
+      'accessToken',
+      'refreshToken',
+      'initData',
+      'secret',
+    ];
     const sanitized: Record<string, any> = Array.isArray(body) ? [] : {};
 
     for (const key of Object.keys(body)) {
-      if (sensitiveKeys.some((s) => key.toLowerCase().includes(s.toLowerCase()))) {
+      if (
+        sensitiveKeys.some((s) => key.toLowerCase().includes(s.toLowerCase()))
+      ) {
         sanitized[key] = '***REDACTED***';
       } else if (typeof body[key] === 'object' && body[key] !== null) {
         sanitized[key] = this.sanitizeBody(body[key]);

@@ -12,7 +12,10 @@ import { User } from '../users/entities/user.entity';
 import { Warehouse } from '../warehouses/entities/warehouse.entity';
 import { Request } from '../requests/entities/request.entity';
 import { CustomerOrderStatus } from '../customer-orders/enums/customer-order-status.enum';
-import { DeliveryStatus, PaymentStatus } from '../customer-orders/enums/customer-order-enums';
+import {
+  DeliveryStatus,
+  PaymentStatus,
+} from '../customer-orders/enums/customer-order-enums';
 import { OrderSource } from '../customer-orders/enums/order-source.enum';
 
 describe('DashboardService', () => {
@@ -31,15 +34,31 @@ describe('DashboardService', () => {
     orderBy: jest.fn().mockReturnThis(),
     limit: jest.fn().mockReturnThis(),
     getRawOne: jest.fn().mockResolvedValue(result),
-    getRawMany: jest.fn().mockResolvedValue(Array.isArray(result) ? result : [result]),
+    getRawMany: jest
+      .fn()
+      .mockResolvedValue(Array.isArray(result) ? result : [result]),
     getMany: jest.fn().mockResolvedValue(Array.isArray(result) ? result : []),
   });
 
   const mockProductRepo = {
     count: jest.fn().mockResolvedValue(25),
     find: jest.fn().mockResolvedValue([
-      { id: 'p-1', code: 'PROD-001', name: 'Product 1', minimumStock: 10, isActive: true, category: { name: 'Cat 1' } },
-      { id: 'p-2', code: 'PROD-002', name: 'Product 2', minimumStock: 5, isActive: true, category: { name: 'Cat 2' } },
+      {
+        id: 'p-1',
+        code: 'PROD-001',
+        name: 'Product 1',
+        minimumStock: 10,
+        isActive: true,
+        category: { name: 'Cat 1' },
+      },
+      {
+        id: 'p-2',
+        code: 'PROD-002',
+        name: 'Product 2',
+        minimumStock: 5,
+        isActive: true,
+        category: { name: 'Cat 2' },
+      },
     ]),
   };
 
@@ -48,7 +67,11 @@ describe('DashboardService', () => {
   };
 
   const mockStockRepo = {
-    createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder({ totalQuantity: '150', totalValue: '3000' })),
+    createQueryBuilder: jest
+      .fn()
+      .mockReturnValue(
+        mockQueryBuilder({ totalQuantity: '150', totalValue: '3000' }),
+      ),
   };
 
   const mockOrderRepo = {
@@ -69,7 +92,12 @@ describe('DashboardService', () => {
         paymentStatus: PaymentStatus.PAID,
         source: OrderSource.MINI_APP,
         createdAt: new Date(),
-        customer: { id: 'c-1', companyName: 'Acme', contactName: 'John', phone: '012345678' },
+        customer: {
+          id: 'c-1',
+          companyName: 'Acme',
+          contactName: 'John',
+          phone: '012345678',
+        },
         items: [{ requestedQuantity: 2 }],
       },
     ]),
@@ -125,11 +153,20 @@ describe('DashboardService', () => {
       providers: [
         DashboardService,
         { provide: getRepositoryToken(Product), useValue: mockProductRepo },
-        { provide: getRepositoryToken(ProductVariant), useValue: mockVariantRepo },
+        {
+          provide: getRepositoryToken(ProductVariant),
+          useValue: mockVariantRepo,
+        },
         { provide: getRepositoryToken(Stock), useValue: mockStockRepo },
-        { provide: getRepositoryToken(StockAdjustment), useValue: mockStockAdjustmentRepo },
+        {
+          provide: getRepositoryToken(StockAdjustment),
+          useValue: mockStockAdjustmentRepo,
+        },
         { provide: getRepositoryToken(CustomerOrder), useValue: mockOrderRepo },
-        { provide: getRepositoryToken(CustomerOrderItem), useValue: mockOrderItemRepo },
+        {
+          provide: getRepositoryToken(CustomerOrderItem),
+          useValue: mockOrderItemRepo,
+        },
         { provide: getRepositoryToken(Customer), useValue: mockCustomerRepo },
         { provide: getRepositoryToken(User), useValue: mockUserRepo },
         { provide: getRepositoryToken(Warehouse), useValue: mockWarehouseRepo },

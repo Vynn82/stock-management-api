@@ -15,12 +15,40 @@ describe('RolesService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RolesService,
-        { provide: getRepositoryToken(Role), useValue: { find: jest.fn(), findOne: jest.fn(), create: jest.fn(), save: jest.fn() } },
-        { provide: getRepositoryToken(RolePermission), useValue: { find: jest.fn(), findOne: jest.fn(), create: jest.fn(), save: jest.fn() } },
-        { provide: getRepositoryToken(Permission), useValue: { find: jest.fn(), findOne: jest.fn() } },
-        { provide: getRepositoryToken(RoleMenu), useValue: { find: jest.fn(), findOne: jest.fn() } },
-        { provide: getRepositoryToken(Menu), useValue: { find: jest.fn(), findOne: jest.fn() } },
-        { provide: DataSource, useValue: { transaction: jest.fn(), createQueryRunner: jest.fn() } },
+        {
+          provide: getRepositoryToken(Role),
+          useValue: {
+            find: jest.fn(),
+            findOne: jest.fn(),
+            create: jest.fn(),
+            save: jest.fn(),
+          },
+        },
+        {
+          provide: getRepositoryToken(RolePermission),
+          useValue: {
+            find: jest.fn(),
+            findOne: jest.fn(),
+            create: jest.fn(),
+            save: jest.fn(),
+          },
+        },
+        {
+          provide: getRepositoryToken(Permission),
+          useValue: { find: jest.fn(), findOne: jest.fn() },
+        },
+        {
+          provide: getRepositoryToken(RoleMenu),
+          useValue: { find: jest.fn(), findOne: jest.fn() },
+        },
+        {
+          provide: getRepositoryToken(Menu),
+          useValue: { find: jest.fn(), findOne: jest.fn() },
+        },
+        {
+          provide: DataSource,
+          useValue: { transaction: jest.fn(), createQueryRunner: jest.fn() },
+        },
       ],
     }).compile();
 

@@ -4,7 +4,6 @@ import { BarcodesService } from './barcodes.service';
 import { Product } from '../products/entities/product.entity';
 import { ProductVariant } from '../product-variants/entities/product-variant.entity';
 import { Stock } from '../stock/entities/stock.entity';
-import { BarcodeFormat, BarcodeSymbology } from './dto/barcode-query.dto';
 
 describe('BarcodesService', () => {
   let service: BarcodesService;
@@ -111,7 +110,9 @@ describe('BarcodesService', () => {
 
   describe('generateQrPng', () => {
     it('should generate a valid QR code PNG buffer', async () => {
-      const buffer = await service.generateQrPng('https://example.com/item/123');
+      const buffer = await service.generateQrPng(
+        'https://example.com/item/123',
+      );
       expect(buffer).toBeInstanceOf(Buffer);
       expect(buffer.length).toBeGreaterThan(0);
       expect(buffer[0]).toBe(0x89);

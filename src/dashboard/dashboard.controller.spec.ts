@@ -9,12 +9,49 @@ describe('DashboardController', () => {
   const mockSummary = {
     generatedAt: new Date().toISOString(),
     kpis: {
-      inventory: { totalProducts: 10, totalVariants: 5, totalStockQuantity: 100, totalStockValue: 1500, lowStockCount: 2, outOfStockCount: 1, totalWarehouses: 2 },
-      orders: { totalOrders: 20, pendingOrders: 3, waitingStockOrders: 1, waitingCustomerOrders: 1, confirmedOrders: 10, deliveredOrders: 4, cancelledOrders: 1, rejectedOrders: 0, todayOrders: 2, thisWeekOrders: 10, thisMonthOrders: 20 },
-      revenue: { totalRevenue: 5000, todayRevenue: 200, thisWeekRevenue: 1500, thisMonthRevenue: 5000, paidRevenue: 4000, unpaidRevenue: 1000 },
-      customers: { totalCustomers: 15, activeCustomers: 14, newCustomersToday: 1, newCustomersThisWeek: 4 },
+      inventory: {
+        totalProducts: 10,
+        totalVariants: 5,
+        totalStockQuantity: 100,
+        totalStockValue: 1500,
+        lowStockCount: 2,
+        outOfStockCount: 1,
+        totalWarehouses: 2,
+      },
+      orders: {
+        totalOrders: 20,
+        pendingOrders: 3,
+        waitingStockOrders: 1,
+        waitingCustomerOrders: 1,
+        confirmedOrders: 10,
+        deliveredOrders: 4,
+        cancelledOrders: 1,
+        rejectedOrders: 0,
+        todayOrders: 2,
+        thisWeekOrders: 10,
+        thisMonthOrders: 20,
+      },
+      revenue: {
+        totalRevenue: 5000,
+        todayRevenue: 200,
+        thisWeekRevenue: 1500,
+        thisMonthRevenue: 5000,
+        paidRevenue: 4000,
+        unpaidRevenue: 1000,
+      },
+      customers: {
+        totalCustomers: 15,
+        activeCustomers: 14,
+        newCustomersToday: 1,
+        newCustomersThisWeek: 4,
+      },
       staff: { totalStaff: 5, activeStaff: 5 },
-      requests: { pendingRequests: 2, pendingStockIn: 1, pendingStockOut: 1, pendingTransfer: 0 },
+      requests: {
+        pendingRequests: 2,
+        pendingStockIn: 1,
+        pendingStockOut: 1,
+        pendingTransfer: 0,
+      },
     },
     salesTrend: [],
     ordersByStatus: [],
@@ -29,7 +66,9 @@ describe('DashboardController', () => {
     getDashboardSummary: jest.fn().mockResolvedValue(mockSummary),
     getDashboardKpis: jest.fn().mockResolvedValue(mockSummary.kpis),
     getSalesTrend: jest.fn().mockResolvedValue({ days: 7, trend: [] }),
-    getOrderBreakdowns: jest.fn().mockResolvedValue({ ordersByStatus: [], ordersBySource: [] }),
+    getOrderBreakdowns: jest
+      .fn()
+      .mockResolvedValue({ ordersByStatus: [], ordersBySource: [] }),
     getTopProducts: jest.fn().mockResolvedValue([]),
     getLowStockAlerts: jest.fn().mockResolvedValue([]),
     getRecentOrders: jest.fn().mockResolvedValue([]),
@@ -58,7 +97,10 @@ describe('DashboardController', () => {
   it('should return unified dashboard summary from getDashboard', async () => {
     const res = await controller.getDashboard({ days: 7, limit: 10 });
     expect(res).toEqual(mockSummary);
-    expect(service.getDashboardSummary).toHaveBeenCalledWith({ days: 7, limit: 10 });
+    expect(service.getDashboardSummary).toHaveBeenCalledWith({
+      days: 7,
+      limit: 10,
+    });
   });
 
   it('should return unified dashboard summary from getSummary alias', async () => {

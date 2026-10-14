@@ -14,11 +14,30 @@ describe('AuthService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
-        { provide: getRepositoryToken(User), useValue: { find: jest.fn(), findOne: jest.fn(), createQueryBuilder: jest.fn() } },
-        { provide: getRepositoryToken(UserRole), useValue: { find: jest.fn(), findOne: jest.fn() } },
-        { provide: JwtService, useValue: { signAsync: jest.fn(), verifyAsync: jest.fn() } },
-        { provide: SessionsService, useValue: { createSession: jest.fn(), findSession: jest.fn() } },
-        { provide: UsersService, useValue: { getMe: jest.fn(), findOne: jest.fn() } },
+        {
+          provide: getRepositoryToken(User),
+          useValue: {
+            find: jest.fn(),
+            findOne: jest.fn(),
+            createQueryBuilder: jest.fn(),
+          },
+        },
+        {
+          provide: getRepositoryToken(UserRole),
+          useValue: { find: jest.fn(), findOne: jest.fn() },
+        },
+        {
+          provide: JwtService,
+          useValue: { signAsync: jest.fn(), verifyAsync: jest.fn() },
+        },
+        {
+          provide: SessionsService,
+          useValue: { createSession: jest.fn(), findSession: jest.fn() },
+        },
+        {
+          provide: UsersService,
+          useValue: { getMe: jest.fn(), findOne: jest.fn() },
+        },
       ],
     }).compile();
 

@@ -73,7 +73,9 @@ export class TelegramAuthService {
    * Validates Telegram WebApp initData string using HMAC-SHA-256.
    * Specification: https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
    */
-  public validateTelegramInitData(initData: string): TelegramUser & { chatId?: string } {
+  public validateTelegramInitData(
+    initData: string,
+  ): TelegramUser & { chatId?: string } {
     const botToken = this.getBotToken();
 
     // Dev fallback if bot token is not configured
@@ -147,7 +149,9 @@ export class TelegramAuthService {
     }
   }
 
-  private parseUserFromInitData(initData: string): TelegramUser & { chatId?: string } {
+  private parseUserFromInitData(
+    initData: string,
+  ): TelegramUser & { chatId?: string } {
     const urlParams = new URLSearchParams(initData);
     const userJson = urlParams.get('user');
     if (!userJson) {
@@ -182,7 +186,8 @@ export class TelegramAuthService {
       // First-time customer: registration required
       return {
         status: 'REGISTRATION_REQUIRED',
-        message: 'No customer account found for this Telegram account. Please register.',
+        message:
+          'No customer account found for this Telegram account. Please register.',
         telegramUser: {
           id: telegramUser.id,
           first_name: telegramUser.first_name,
@@ -196,11 +201,17 @@ export class TelegramAuthService {
 
     // Update account metadata if changed
     let accountUpdated = false;
-    if (telegramUser.username && account.telegramUsername !== telegramUser.username) {
+    if (
+      telegramUser.username &&
+      account.telegramUsername !== telegramUser.username
+    ) {
       account.telegramUsername = telegramUser.username;
       accountUpdated = true;
     }
-    if (telegramUser.first_name && account.firstName !== telegramUser.first_name) {
+    if (
+      telegramUser.first_name &&
+      account.firstName !== telegramUser.first_name
+    ) {
       account.firstName = telegramUser.first_name;
       accountUpdated = true;
     }
@@ -254,14 +265,16 @@ export class TelegramAuthService {
       case CustomerStatus.SUSPENDED: {
         return {
           status: CustomerStatus.SUSPENDED,
-          message: 'Your account is currently suspended. Please contact our staff.',
+          message:
+            'Your account is currently suspended. Please contact our staff.',
         };
       }
 
       case CustomerStatus.BLOCKED: {
         return {
           status: CustomerStatus.BLOCKED,
-          message: 'Your account is blocked. You cannot access the ordering system.',
+          message:
+            'Your account is blocked. You cannot access the ordering system.',
         };
       }
 
@@ -348,16 +361,25 @@ export class TelegramAuthService {
 
           // Update Telegram account details
           existingAccount.telegramChatId = chatId;
-          existingAccount.telegramUsername = telegramUser.username || existingAccount.telegramUsername;
-          existingAccount.firstName = telegramUser.first_name || existingAccount.firstName;
-          existingAccount.lastName = telegramUser.last_name || existingAccount.lastName;
+          existingAccount.telegramUsername =
+            telegramUser.username || existingAccount.telegramUsername;
+          existingAccount.firstName =
+            telegramUser.first_name || existingAccount.firstName;
+          existingAccount.lastName =
+            telegramUser.last_name || existingAccount.lastName;
           await manager.save(CustomerTelegramAccount, existingAccount);
 
-          this.logger.log(`Customer #${existingCustomer.id} re-registered from REJECTED -> ACTIVE.`);
-          const tokenRes = await this.generateCustomerToken(existingCustomer, existingAccount);
+          this.logger.log(
+            `Customer #${existingCustomer.id} re-registered from REJECTED -> ACTIVE.`,
+          );
+          const tokenRes = await this.generateCustomerToken(
+            existingCustomer,
+            existingAccount,
+          );
           return {
             ...tokenRes,
-            message: 'Your registration information has been updated. Welcome back!',
+            message:
+              'Your registration information has been updated. Welcome back!',
           };
         }
 
@@ -366,7 +388,10 @@ export class TelegramAuthService {
           this.logger.log(
             `Idempotent registration: Telegram user ${telegramUserId} already has active customer #${existingCustomer.id}.`,
           );
-          const tokenRes = await this.generateCustomerToken(existingCustomer, existingAccount);
+          const tokenRes = await this.generateCustomerToken(
+            existingCustomer,
+            existingAccount,
+          );
           return {
             ...tokenRes,
             message: 'You are already registered and your account is active.',
@@ -383,7 +408,10 @@ export class TelegramAuthService {
           this.logger.log(
             `Customer #${existingCustomer.id} auto-activated from PENDING -> ACTIVE upon registration.`,
           );
-          const tokenRes = await this.generateCustomerToken(existingCustomer, existingAccount);
+          const tokenRes = await this.generateCustomerToken(
+            existingCustomer,
+            existingAccount,
+          );
           return {
             ...tokenRes,
             message: 'Your account is active. Welcome!',
@@ -413,10 +441,13 @@ export class TelegramAuthService {
       }
 
       // 3. Duplicate company check (Flag for staff review, do NOT silently merge)
-      const allCustomers = await manager.find(Customer, { select: { id: true, companyName: true } });
+      const allCustomers = await manager.find(Customer, {
+        select: { id: true, companyName: true },
+      });
       const targetNorm = normalizeCompanyName(companyName);
       const companyDuplicate = allCustomers.find(
-        (c) => c.companyName && normalizeCompanyName(c.companyName) === targetNorm,
+        (c) =>
+          c.companyName && normalizeCompanyName(c.companyName) === targetNorm,
       );
       if (companyDuplicate) {
         this.logger.warn(
@@ -447,8 +478,13 @@ export class TelegramAuthService {
         });
         await manager.save(CustomerTelegramAccount, account);
 
-        this.logger.log(`New customer registration created: #${savedCustomer.id} (ACTIVE).`);
-        const tokenRes = await this.generateCustomerToken(savedCustomer, account);
+        this.logger.log(
+          `New customer registration created: #${savedCustomer.id} (ACTIVE).`,
+        );
+        const tokenRes = await this.generateCustomerToken(
+          savedCustomer,
+          account,
+        );
         return {
           ...tokenRes,
           message: 'Registration successful! Welcome to the store.',
@@ -463,21 +499,30 @@ export class TelegramAuthService {
           this.logger.warn(
             `Concurrent registration caught for telegram_user_id ${telegramUserId}. Loading existing account.`,
           );
-          const concurrentAccount = await manager.findOne(CustomerTelegramAccount, {
-            where: { telegramUserId },
-            relations: { customer: true },
-          });
+          const concurrentAccount = await manager.findOne(
+            CustomerTelegramAccount,
+            {
+              where: { telegramUserId },
+              relations: { customer: true },
+            },
+          );
 
           if (concurrentAccount) {
             if (concurrentAccount.customer.status === CustomerStatus.ACTIVE) {
-              return this.generateCustomerToken(concurrentAccount.customer, concurrentAccount);
+              return this.generateCustomerToken(
+                concurrentAccount.customer,
+                concurrentAccount,
+              );
             }
             if (concurrentAccount.customer.status === CustomerStatus.PENDING) {
               concurrentAccount.customer.status = CustomerStatus.ACTIVE;
               concurrentAccount.customer.isActive = true;
               concurrentAccount.customer.rejectionReason = null;
               await manager.save(Customer, concurrentAccount.customer);
-              return this.generateCustomerToken(concurrentAccount.customer, concurrentAccount);
+              return this.generateCustomerToken(
+                concurrentAccount.customer,
+                concurrentAccount,
+              );
             }
             return {
               status: concurrentAccount.customer.status,
@@ -510,7 +555,9 @@ export class TelegramAuthService {
     }
 
     const trimmed = queryText.trim();
-    const usernameQuery = trimmed.startsWith('@') ? trimmed.slice(1).trim() : trimmed;
+    const usernameQuery = trimmed.startsWith('@')
+      ? trimmed.slice(1).trim()
+      : trimmed;
     const phoneQuery = normalizePhoneNumber(trimmed);
 
     const qb = this.customerRepo
@@ -609,7 +656,9 @@ export class TelegramAuthService {
     customer.rejectionReason = null;
     const saved = await this.customerRepo.save(customer);
 
-    this.logger.log(`Customer #${customer.id} approved by staff #${staffId}. Status -> ACTIVE.`);
+    this.logger.log(
+      `Customer #${customer.id} approved by staff #${staffId}. Status -> ACTIVE.`,
+    );
 
     // Send Telegram Notification (Rule 11)
     if (customer.telegramAccounts && customer.telegramAccounts.length > 0) {

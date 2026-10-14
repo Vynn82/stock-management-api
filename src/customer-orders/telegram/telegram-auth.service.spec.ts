@@ -31,7 +31,7 @@ import { Stock } from '../../stock/entities/stock.entity';
 import { Warehouse } from '../../warehouses/entities/warehouse.entity';
 import { MailsService } from '../../mails/mails.service';
 
-const TEST_BOT_TOKEN = '';
+const TEST_BOT_TOKEN = 'test_telegram_bot_token_123456';
 
 function createValidInitData(
   user: any,
