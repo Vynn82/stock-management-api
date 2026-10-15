@@ -33,7 +33,9 @@ import { MailsService } from '../../mails/mails.service';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
-const TEST_BOT_TOKEN = (process.env.TELEGRAM_BOT_TOKEN || '')
+const TEST_BOT_TOKEN = (
+  process.env.TELEGRAM_BOT_TOKEN || 'mock-bot-token-for-unit-tests-123456789'
+)
   .replace(/^["']|["']$/g, '')
   .trim();
 
