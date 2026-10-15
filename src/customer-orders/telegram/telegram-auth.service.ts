@@ -301,6 +301,11 @@ export class TelegramAuthService {
         contactName: customer.contactName,
         phone: customer.phone,
         address: customer.address,
+        latitude: customer.latitude != null ? Number(customer.latitude) : null,
+        longitude: customer.longitude != null ? Number(customer.longitude) : null,
+        province: customer.province || null,
+        district: customer.district || null,
+        commune: customer.commune || null,
         status: customer.status,
         telegramUserId: account.telegramUserId,
         telegramUsername: account.telegramUsername,
@@ -324,6 +329,18 @@ export class TelegramAuthService {
     const contactName = dto.contactName.trim();
     const address = dto.address.trim();
 
+    const latitude =
+      typeof dto.latitude === 'number' && !isNaN(dto.latitude)
+        ? Number(dto.latitude)
+        : null;
+    const longitude =
+      typeof dto.longitude === 'number' && !isNaN(dto.longitude)
+        ? Number(dto.longitude)
+        : null;
+    const province = dto.province?.trim() || null;
+    const district = dto.district?.trim() || null;
+    const commune = dto.commune?.trim() || null;
+
     return this.dataSource.transaction(async (manager: EntityManager) => {
       // 1. Check if Telegram account already exists
       const existingAccount = await manager.findOne(CustomerTelegramAccount, {
@@ -340,6 +357,11 @@ export class TelegramAuthService {
           existingCustomer.contactName = contactName;
           existingCustomer.phone = normalizedPhone;
           existingCustomer.address = address;
+          existingCustomer.latitude = latitude;
+          existingCustomer.longitude = longitude;
+          existingCustomer.province = province;
+          existingCustomer.district = district;
+          existingCustomer.commune = commune;
           existingCustomer.status = CustomerStatus.ACTIVE;
           existingCustomer.rejectionReason = null;
           existingCustomer.isActive = true;
@@ -431,6 +453,11 @@ export class TelegramAuthService {
           contactName,
           phone: normalizedPhone,
           address,
+          latitude,
+          longitude,
+          province,
+          district,
+          commune,
           status: CustomerStatus.ACTIVE,
           rejectionReason: null,
           isActive: true,
@@ -668,5 +695,129 @@ export class TelegramAuthService {
       message: 'Customer registration rejected.',
       customer: saved,
     };
+  }
+
+  /**
+   * Reverse geocodes latitude & longitude into human-readable address & admin details.
+   */
+  async reverseGeocode(lat: number, lng: number) {
+    if (
+      isNaN(lat) ||
+      isNaN(lng) ||
+      lat < -90 ||
+      lat > 90 ||
+      lng < -180 ||
+      lng > 180
+    ) {
+      throw new BadRequestException(
+        'Invalid coordinates. Latitude must be between -90 and 90, Longitude between -180 and 180.',
+      );
+    }
+
+    try {
+      const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`;
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent':
+            'StockManagementAPI/1.0 (contact@stockmanagement.local)',
+          Accept: 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error(`Geocoding provider responded with HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      const addr = data.address || {};
+
+      const province = addr.state || addr.province || addr.city || null;
+      const district =
+        addr.city_district ||
+        addr.district ||
+        addr.county ||
+        addr.town ||
+        null;
+      const commune =
+        addr.quarter ||
+        addr.suburb ||
+        addr.neighbourhood ||
+        addr.village ||
+        null;
+
+      return {
+        formattedAddress: data.display_name || `${lat}, ${lng}`,
+        latitude: lat,
+        longitude: lng,
+        province,
+        district,
+        commune,
+      };
+    } catch (err: any) {
+      this.logger.warn(`Reverse geocoding failed: ${err.message}`);
+      return {
+        formattedAddress: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+        latitude: lat,
+        longitude: lng,
+        province: null,
+        district: null,
+        commune: null,
+      };
+    }
+  }
+
+  /**
+   * Searches places/addresses using OpenStreetMap Nominatim.
+   */
+  async searchLocation(query: string) {
+    const q = query?.trim();
+    if (!q || q.length < 2) {
+      return [];
+    }
+
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+        q,
+      )}&limit=5&addressdetails=1`;
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent':
+            'StockManagementAPI/1.0 (contact@stockmanagement.local)',
+          Accept: 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error(`Search provider responded with HTTP ${res.status}`);
+      }
+
+      const list = await res.json();
+      if (!Array.isArray(list)) return [];
+
+      return list.map((item: any) => {
+        const addr = item.address || {};
+        return {
+          displayName: item.display_name,
+          latitude: Number(item.lat),
+          longitude: Number(item.lon),
+          province: addr.state || addr.province || addr.city || null,
+          district:
+            addr.city_district ||
+            addr.district ||
+            addr.county ||
+            addr.town ||
+            null,
+          commune:
+            addr.quarter ||
+            addr.suburb ||
+            addr.neighbourhood ||
+            addr.village ||
+            null,
+        };
+      });
+    } catch (err: any) {
+      this.logger.warn(`Place search failed: ${err.message}`);
+      return [];
+    }
   }
 }
