@@ -11,9 +11,13 @@ on:
       - uat
   workflow_dispatch:
 
+# Do not cancel a running production deployment.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 jobs:
   # =======================================================
@@ -22,6 +26,7 @@ jobs:
   ci:
     name: Code Quality, Tests & Container Verification
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -30,7 +35,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: npm
 
       - name: Install Dependencies
         run: npm ci
@@ -39,7 +44,7 @@ jobs:
         run: npm run lint
 
       - name: Run Unit Tests
-        run: npm test
+        run: npm test -- --runInBand
 
       - name: Verify TypeScript Build
         run: npm run build
@@ -47,14 +52,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Verify Multi-Stage Production Docker Build
-        uses: docker/build-push-action@v5
+      - name: Verify Production Docker Build
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           push: false
-          load: true
-          tags: stock-management-api:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -64,18 +67,22 @@ jobs:
   deploy:
     name: Deploy to AWS EC2
     needs: [ci]
-    # STRICT GUARD: Deploy ONLY runs if CI (lint, tests, build, docker) passed 100%
-    if: |
-      always() &&
+
+    # Production deployment only after a successful CI run on main.
+    if: >-
       needs.ci.result == 'success' &&
       github.ref == 'refs/heads/main' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      (github.event_name == 'push' ||
+       github.event_name == 'workflow_dispatch')
+
     runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout Code for Deploy Artifacts
-        uses: actions/checkout@v4
+    # Serialize production deployments.
+    concurrency:
+      group: stock-management-production
+      cancel-in-progress: false
 
+    steps:
       - name: Deploy to AWS EC2 via SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -83,14 +90,66 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_PORT || 22 }}
-          script_stop: true
+          command_timeout: 20m
           script: |
-            APP_DIR="${APP_DIR:-/home/${{ secrets.EC2_USER }}/stock-management-api}"
-            if [ ! -d "$APP_DIR" ]; then
-              echo "Creating application directory at $APP_DIR..."
-              mkdir -p "$APP_DIR"
-              git clone https://github.com/${{ github.repository }}.git "$APP_DIR"
+            set -eu
+
+            APP_DIR="/opt/stock-management-api"
+
+            echo "Starting production deployment..."
+
+            if [ ! -d "$APP_DIR/.git" ]; then
+              echo "ERROR: Git repository not found at $APP_DIR"
+              exit 1
             fi
+
             cd "$APP_DIR"
-            chmod +x deploy.sh
-            ./deploy.sh
+
+            # Preserve the known EC2-local deploy.sh edit, if present.
+            # This workflow deploys directly and does not execute deploy.sh.
+            if ! git diff --quiet -- deploy.sh; then
+              git stash push -m "Preserve EC2-local deploy.sh edit" -- deploy.sh
+            fi
+
+            # Fail rather than silently overwrite other local changes.
+            if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+              echo "ERROR: Other tracked local changes exist on EC2."
+              git status --short
+              exit 1
+            fi
+
+            # Fetch and fast-forward only; never force-reset the server.
+            git pull --ff-only origin main
+
+            echo "Building and starting production services..."
+
+            sudo docker compose \
+              -f docker-compose.prod.yml \
+              up -d --build
+
+            echo "Waiting for API health check..."
+
+            for i in $(seq 1 30); do
+              STATUS=$(sudo docker inspect \
+                --format='{{.State.Health.Status}}' \
+                stock-management-api 2>/dev/null || echo starting)
+
+              if [ "$STATUS" = "healthy" ]; then
+                echo "SUCCESS: API is healthy."
+                sudo docker compose -f docker-compose.prod.yml ps
+                exit 0
+              fi
+
+              if [ "$STATUS" = "unhealthy" ]; then
+                echo "ERROR: API is unhealthy."
+                sudo docker logs --tail 100 stock-management-api
+                exit 1
+              fi
+
+              sleep 10
+            done
+
+            echo "ERROR: API did not become healthy in time."
+            sudo docker compose -f docker-compose.prod.yml ps
+            sudo docker logs --tail 100 stock-management-api
+            exit 1
