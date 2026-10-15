@@ -1,25 +1,55 @@
-api:
-  image: 870853685390.dkr.ecr.ap-southeast-1.amazonaws.com/stock-management-api:${IMAGE_TAG:-latest}
-  container_name: stock-management-api
-  restart: always
-  depends_on:
-    postgres:
-      condition: service_healthy
-  env_file:
-    - .env
-  environment:
-    NODE_ENV: production
-    PORT: 3000
-    DB_HOST: postgres
-    DB_PORT: 5432
-  ports:
-    - '3000:3000'
-  healthcheck:
-    test:
-      ['CMD', 'curl', '-f', 'http://localhost:3000/products/import/template']
-    interval: 30s
-    timeout: 5s
-    retries: 3
-    start_period: 20s
-  networks:
-    - stock_network
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: stock-management-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:?Set DB_DATABASE}
+      POSTGRES_USER: ${DB_USERNAME:?Set DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - stock_network
+
+  api:
+    image: 870853685390.dkr.ecr.ap-southeast-1.amazonaws.com/stock-management-api:${IMAGE_TAG:-latest}
+    container_name: stock-management-api
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+    ports:
+      - '3000:3000'
+    healthcheck:
+      test:
+        ['CMD', 'curl', '-f', 'http://localhost:3000/products/import/template']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - stock_network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  stock_network:
+    driver: bridge
