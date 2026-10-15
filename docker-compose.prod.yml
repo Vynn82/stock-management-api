@@ -1,5 +1,5 @@
 api:
-  image: ghcr.io/vynn82/stock-management-api:${IMAGE_TAG:-latest}
+  image: 870853685390.dkr.ecr.ap-southeast-1.amazonaws.com/stock-management-api:${IMAGE_TAG:-latest}
   container_name: stock-management-api
   restart: always
   depends_on:

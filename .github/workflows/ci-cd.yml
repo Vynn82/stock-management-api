@@ -1,31 +1,27 @@
-name: CI/CD Pipeline
+name: Stock Management API CI/CD
 
 on:
   push:
     branches:
-      - main
       - uat
-  pull_request:
-    branches:
       - main
-      - uat
   workflow_dispatch:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
+env:
+  AWS_REGION: ap-southeast-1
+  ECR_REPOSITORY: stock-management-api
+  ECR_REGISTRY: 870853685390.dkr.ecr.ap-southeast-1.amazonaws.com
+
 jobs:
-  # 1. CI
   ci:
     name: Test and Build
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout source
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -34,145 +30,133 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Install Dependencies
+      - name: Install dependencies
         run: npm ci
 
-      - name: Run Lint
+      - name: Lint
         run: npm run lint
 
-      - name: Run Tests
+      - name: Test
         run: npm test -- --runInBand
 
-      - name: Verify TypeScript Build
+      - name: Build NestJS
         run: npm run build
 
-  # 2. Build and Push Docker Image
-  build-and-push:
-    name: Build and Push Image
+  publish:
+    name: Build and Push to ECR
     needs: ci
-    if: >-
-      needs.ci.result == 'success' &&
-      github.ref == 'refs/heads/main' &&
-      (github.event_name == 'push' ||
-       github.event_name == 'workflow_dispatch')
-
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     permissions:
       contents: read
-      packages: write
+      id-token: write
 
     outputs:
       image_tag: ${{ steps.meta.outputs.tag }}
 
     steps:
-      - name: Checkout Code
+      - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Set Image Tag
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tag
         id: meta
         run: echo "tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and Push Production Image
+      - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./Dockerfile
           push: true
-          tags: ghcr.io/vynn82/stock-management-api:${{ steps.meta.outputs.tag }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: |
+            870853685390.dkr.ecr.ap-southeast-1.amazonaws.com/stock-management-api:${{ github.sha }}
+            870853685390.dkr.ecr.ap-southeast-1.amazonaws.com/stock-management-api:latest
 
-  # 3. Deploy to EC2
   deploy:
-    name: Deploy to AWS EC2
-    needs:
-      - ci
-      - build-and-push
-
-    if: >-
-      needs.ci.result == 'success' &&
-      needs.build-and-push.result == 'success' &&
-      github.ref == 'refs/heads/main' &&
-      (github.event_name == 'push' ||
-       github.event_name == 'workflow_dispatch')
-
+    name: Deploy to EC2
+    needs: publish
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
-    concurrency:
-      group: stock-management-production
-      cancel-in-progress: false
-
     steps:
-      - name: Deploy via SSH
+      - name: Deploy application
         uses: appleboy/ssh-action@v1.2.0
         env:
-          IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          GHCR_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+          IMAGE_TAG: ${{ needs.publish.outputs.image_tag }}
+          AWS_REGION: ap-southeast-1
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_PORT || 22 }}
-          command_timeout: 10m
-          envs: IMAGE_TAG,GHCR_USERNAME,GHCR_TOKEN
+          envs: IMAGE_TAG,AWS_REGION
           script: |
             set -eu
 
-            APP_DIR="/opt/stock-management-api"
-            cd "$APP_DIR"
+            cd /opt/stock-management-api
 
             echo "Updating deployment configuration..."
             git pull --ff-only origin main
 
-            echo "Logging in to GitHub Container Registry..."
-            echo "$GHCR_TOKEN" |
-              sudo docker login ghcr.io \
-                --username "$GHCR_USERNAME" \
-                --password-stdin
+            echo "Checking AWS identity..."
+            aws sts get-caller-identity
 
-            echo "Pulling production image..."
-            sudo docker pull \
-              "ghcr.io/vynn82/stock-management-api:$IMAGE_TAG"
+            echo "Logging in to private ECR..."
+            aws ecr get-login-password --region "$AWS_REGION" |
+              sudo docker login \
+                --username AWS \
+                --password-stdin \
+                870853685390.dkr.ecr.ap-southeast-1.amazonaws.com
 
-            echo "Starting services without building on EC2..."
-            sudo env IMAGE_TAG="$IMAGE_TAG" \
-              docker compose -f docker-compose.prod.yml \
-              up -d --no-build
+            echo "Pulling image: $IMAGE_TAG"
+            export IMAGE_TAG
 
-            echo "Waiting for API health..."
+            sudo --preserve-env=IMAGE_TAG \
+              docker compose -f docker-compose.prod.yml pull api
+
+            echo "Restarting API..."
+            sudo --preserve-env=IMAGE_TAG \
+              docker compose -f docker-compose.prod.yml up -d --no-build api
+
+            echo "Waiting for API container health..."
+            healthy=false
+
             for i in $(seq 1 30); do
-              STATUS=$(sudo docker inspect \
-                --format='{{.State.Health.Status}}' \
-                stock-management-api 2>/dev/null || echo starting)
+              container_id="$(sudo docker compose \
+                -f docker-compose.prod.yml ps -q api)"
 
-              if [ "$STATUS" = "healthy" ]; then
-                echo "Deployment successful!"
-                sudo docker compose -f docker-compose.prod.yml ps
-                exit 0
-              fi
+              if [ -n "$container_id" ]; then
+                status="$(sudo docker inspect \
+                  --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+                  "$container_id")"
 
-              if [ "$STATUS" = "unhealthy" ]; then
-                echo "API is unhealthy."
-                sudo docker logs --tail 100 stock-management-api
-                exit 1
+                if [ "$status" = "healthy" ] || [ "$status" = "running" ]; then
+                  healthy=true
+                  break
+                fi
               fi
 
               sleep 10
             done
 
-            echo "API health check timed out."
+            if [ "$healthy" != "true" ]; then
+              echo "Deployment health check failed"
+              sudo docker compose \
+                -f docker-compose.prod.yml logs --tail=100 api
+              exit 1
+            fi
+
+            echo "Deployment completed successfully."
             sudo docker compose -f docker-compose.prod.yml ps
-            sudo docker logs --tail 100 stock-management-api
-            exit 1
