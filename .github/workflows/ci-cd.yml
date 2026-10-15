@@ -11,7 +11,6 @@ on:
       - uat
   workflow_dispatch:
 
-# Do not cancel a running production deployment.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -20,18 +19,16 @@ permissions:
   contents: read
 
 jobs:
-  # =======================================================
-  # 1. CONTINUOUS INTEGRATION (CI)
-  # =======================================================
+  # 1. CI
   ci:
-    name: Code Quality, Tests & Container Verification
+    name: Test and Build
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -40,35 +37,19 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Run Lint & Code Quality Check
+      - name: Run Lint
         run: npm run lint
 
-      - name: Run Unit Tests
+      - name: Run Tests
         run: npm test -- --runInBand
 
       - name: Verify TypeScript Build
         run: npm run build
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Verify Production Docker Build
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          push: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  # =======================================================
-  # 2. CONTINUOUS DEPLOYMENT (CD) TO AWS EC2
-  # =======================================================
-  deploy:
-    name: Deploy to AWS EC2
-    needs: [ci]
-
-    # Production deployment only after a successful CI run on main.
+  # 2. Build and Push Docker Image
+  build-and-push:
+    name: Build and Push Image
+    needs: ci
     if: >-
       needs.ci.result == 'success' &&
       github.ref == 'refs/heads/main' &&
@@ -77,71 +58,113 @@ jobs:
 
     runs-on: ubuntu-latest
 
-    # Serialize production deployments.
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tag }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set Image Tag
+        id: meta
+        run: echo "tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Production Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ghcr.io/vynn82/stock-management-api:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # 3. Deploy to EC2
+  deploy:
+    name: Deploy to AWS EC2
+    needs:
+      - ci
+      - build-and-push
+
+    if: >-
+      needs.ci.result == 'success' &&
+      needs.build-and-push.result == 'success' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' ||
+       github.event_name == 'workflow_dispatch')
+
+    runs-on: ubuntu-latest
+
     concurrency:
       group: stock-management-production
       cancel-in-progress: false
 
     steps:
-      - name: Deploy to AWS EC2 via SSH
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_PORT || 22 }}
-          command_timeout: 20m
+          command_timeout: 10m
+          envs: IMAGE_TAG,GHCR_USERNAME,GHCR_TOKEN
           script: |
             set -eu
 
             APP_DIR="/opt/stock-management-api"
-
-            echo "Starting production deployment..."
-
-            if [ ! -d "$APP_DIR/.git" ]; then
-              echo "ERROR: Git repository not found at $APP_DIR"
-              exit 1
-            fi
-
             cd "$APP_DIR"
 
-            # Preserve the known EC2-local deploy.sh edit, if present.
-            # This workflow deploys directly and does not execute deploy.sh.
-            if ! git diff --quiet -- deploy.sh; then
-              git stash push -m "Preserve EC2-local deploy.sh edit" -- deploy.sh
-            fi
-
-            # Fail rather than silently overwrite other local changes.
-            if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
-              echo "ERROR: Other tracked local changes exist on EC2."
-              git status --short
-              exit 1
-            fi
-
-            # Fetch and fast-forward only; never force-reset the server.
+            echo "Updating deployment configuration..."
             git pull --ff-only origin main
 
-            echo "Building and starting production services..."
+            echo "Logging in to GitHub Container Registry..."
+            echo "$GHCR_TOKEN" |
+              sudo docker login ghcr.io \
+                --username "$GHCR_USERNAME" \
+                --password-stdin
 
-            sudo docker compose \
-              -f docker-compose.prod.yml \
-              up -d --build
+            echo "Pulling production image..."
+            sudo docker pull \
+              "ghcr.io/vynn82/stock-management-api:$IMAGE_TAG"
 
-            echo "Waiting for API health check..."
+            echo "Starting services without building on EC2..."
+            sudo env IMAGE_TAG="$IMAGE_TAG" \
+              docker compose -f docker-compose.prod.yml \
+              up -d --no-build
 
+            echo "Waiting for API health..."
             for i in $(seq 1 30); do
               STATUS=$(sudo docker inspect \
                 --format='{{.State.Health.Status}}' \
                 stock-management-api 2>/dev/null || echo starting)
 
               if [ "$STATUS" = "healthy" ]; then
-                echo "SUCCESS: API is healthy."
+                echo "Deployment successful!"
                 sudo docker compose -f docker-compose.prod.yml ps
                 exit 0
               fi
 
               if [ "$STATUS" = "unhealthy" ]; then
-                echo "ERROR: API is unhealthy."
+                echo "API is unhealthy."
                 sudo docker logs --tail 100 stock-management-api
                 exit 1
               fi
@@ -149,7 +172,7 @@ jobs:
               sleep 10
             done
 
-            echo "ERROR: API did not become healthy in time."
+            echo "API health check timed out."
             sudo docker compose -f docker-compose.prod.yml ps
             sudo docker logs --tail 100 stock-management-api
             exit 1
