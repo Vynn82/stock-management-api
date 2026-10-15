@@ -16,9 +16,13 @@ env:
   ECR_REGISTRY: 870853685390.dkr.ecr.ap-southeast-1.amazonaws.com
 
 jobs:
+  # ==========================================
+  # 1. CI: Install, lint, test, and build
+  # ==========================================
   ci:
     name: Test and Build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout source
@@ -42,11 +46,16 @@ jobs:
       - name: Build NestJS
         run: npm run build
 
+  # ==========================================
+  # 2. Build Docker image and push to ECR
+  #    Only runs on main after CI succeeds
+  # ==========================================
   publish:
     name: Build and Push to ECR
     needs: ci
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     permissions:
       contents: read
@@ -59,7 +68,7 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials with OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
@@ -75,33 +84,41 @@ jobs:
         id: meta
         run: echo "tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
-      - name: Build and push image
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: |
-            870853685390.dkr.ecr.ap-southeast-1.amazonaws.com/stock-management-api:${{ github.sha }}
-            870853685390.dkr.ecr.ap-southeast-1.amazonaws.com/stock-management-api:latest
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
 
+  # ==========================================
+  # 3. Deploy the published image to EC2
+  # ==========================================
   deploy:
     name: Deploy to EC2
     needs: publish
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Deploy application
         uses: appleboy/ssh-action@v1.2.0
         env:
           IMAGE_TAG: ${{ needs.publish.outputs.image_tag }}
-          AWS_REGION: ap-southeast-1
+          AWS_REGION: ${{ env.AWS_REGION }}
+          ECR_REGISTRY: ${{ env.ECR_REGISTRY }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_PORT || 22 }}
-          envs: IMAGE_TAG,AWS_REGION
+          envs: IMAGE_TAG,AWS_REGION,ECR_REGISTRY
           script: |
             set -eu
 
@@ -110,40 +127,52 @@ jobs:
             echo "Updating deployment configuration..."
             git pull --ff-only origin main
 
-            echo "Checking AWS identity..."
+            echo "Checking EC2 AWS identity..."
             aws sts get-caller-identity
 
-            echo "Logging in to private ECR..."
-            aws ecr get-login-password --region "$AWS_REGION" |
+            echo "Logging in to Amazon ECR..."
+            aws ecr get-login-password \
+              --region "$AWS_REGION" |
               sudo docker login \
                 --username AWS \
-                --password-stdin \
-                870853685390.dkr.ecr.ap-southeast-1.amazonaws.com
+                --password-stdin "$ECR_REGISTRY"
 
-            echo "Pulling image: $IMAGE_TAG"
+            echo "Pulling image tag: $IMAGE_TAG"
             export IMAGE_TAG
 
             sudo --preserve-env=IMAGE_TAG \
               docker compose -f docker-compose.prod.yml pull api
 
-            echo "Restarting API..."
+            echo "Restarting API container..."
             sudo --preserve-env=IMAGE_TAG \
-              docker compose -f docker-compose.prod.yml up -d --no-build api
+              docker compose -f docker-compose.prod.yml up \
+                -d --no-build api
 
-            echo "Waiting for API container health..."
+            echo "Waiting for API health check..."
             healthy=false
 
             for i in $(seq 1 30); do
-              container_id="$(sudo docker compose \
-                -f docker-compose.prod.yml ps -q api)"
+              container_id="$(
+                sudo docker compose \
+                  -f docker-compose.prod.yml ps -q api
+              )"
 
               if [ -n "$container_id" ]; then
-                status="$(sudo docker inspect \
-                  --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
-                  "$container_id")"
+                status="$(
+                  sudo docker inspect \
+                    --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+                    "$container_id"
+                )"
 
-                if [ "$status" = "healthy" ] || [ "$status" = "running" ]; then
+                echo "Health check attempt $i/30: $status"
+
+                if [ "$status" = "healthy" ]; then
                   healthy=true
+                  break
+                fi
+
+                if [ "$status" = "unhealthy" ] || [ "$status" = "exited" ]; then
+                  echo "API container failed."
                   break
                 fi
               fi
@@ -152,11 +181,17 @@ jobs:
             done
 
             if [ "$healthy" != "true" ]; then
-              echo "Deployment health check failed"
+              echo "Deployment failed: API did not become healthy."
+
+              sudo docker compose \
+                -f docker-compose.prod.yml ps
+
               sudo docker compose \
                 -f docker-compose.prod.yml logs --tail=100 api
+
               exit 1
             fi
 
             echo "Deployment completed successfully."
-            sudo docker compose -f docker-compose.prod.yml ps
+            sudo docker compose \
+              -f docker-compose.prod.yml ps
