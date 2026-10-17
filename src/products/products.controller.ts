@@ -20,7 +20,12 @@ import * as authenticatedUserInterface from '../auth/interfaces/authenticated-re
 
 import { ProductsService } from './products.service';
 import { ProductsExcelService } from './products-excel.service';
-import { PaginationDto } from '../common/pagination';
+import { BarcodesService } from '../barcodes/barcodes.service';
+import {
+  GenerateBarcodeQueryDto,
+  GenerateQrQueryDto,
+  LabelQueryDto,
+} from '../barcodes/dto/barcode-query.dto';
 import { ProductFilterDto } from './dto/product-filter.dto';
 import { RequirePermission } from '../auth/decorators/permission.decorator';
 import { Public } from '../auth/decorators/public.decorator';
@@ -31,6 +36,7 @@ export class ProductsController {
   constructor(
     private readonly productsService: ProductsService,
     private readonly productsExcelService: ProductsExcelService,
+    private readonly barcodesService: BarcodesService,
   ) {}
 
   /**
@@ -41,60 +47,21 @@ export class ProductsController {
   @UseInterceptors(
     AnyFilesInterceptor(imageUploadOptions),
   )
-  async create(
+  create(
     @Body() body: any,
     @UploadedFiles() files: Express.Multer.File[],
     @Req() req: authenticatedUserInterface.AuthenticatedRequest,
   ) {
-    const parseField = (field: any) => {
-      if (typeof field === 'string') {
-        try {
-          return JSON.parse(field);
-        } catch {
-          return field;
-        }
-      }
-      return field;
-    };
-
-    const product =
-      parseField(body.product) ?? (body.productCode ? body : undefined);
-    const variants = parseField(body.variants);
-    const stock = parseField(body.stock);
-
-    const dto = {
-      product,
-      variants,
-      stock,
-      remark: body.remark ?? null,
-    };
-
-    let productImageUrl: string | undefined;
-    const variantImageUrls: Record<string, string> = {};
-
-    for (const file of files ?? []) {
-      if (file.fieldname === 'image') {
-        productImageUrl = file.path;
-        continue;
-      }
-
-      const match = file.fieldname.match(/^variantImage\[(.+)\]$/);
-      if (match) {
-        variantImageUrls[match[1]] = file.path;
-      }
-    }
-
-    return this.productsService.createDirect(
-      dto,
-      req.user.sub,
-      productImageUrl,
-      variantImageUrls,
-    );
+    return this.productsService.createFromMultipart(body, files, req.user.sub);
   }
 
+<<<<<<< HEAD
   @RequirePermission('PRODUCT_VIEW')
+=======
+  @Public()
+>>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
   @Get()
-  async findAll(@Query() query: ProductFilterDto) {
+  findAll(@Query() query: ProductFilterDto) {
     return this.productsService.findAll(query);
   }
 
@@ -111,10 +78,10 @@ export class ProductsController {
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition':
         'attachment; filename="products_direct_import_template.xlsx"',
-      'Content-Length': file.length,
+      'Content-Length': file.length.toString(),
     });
 
-    res.send(file);
+    return res.send(file);
   }
 
   /**
@@ -132,10 +99,10 @@ export class ProductsController {
       'Content-Type':
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="products_export_${dateStr}.xlsx"`,
-      'Content-Length': file.length,
+      'Content-Length': file.length.toString(),
     });
 
-    res.send(file);
+    return res.send(file);
   }
 
   /**
@@ -170,7 +137,7 @@ export class ProductsController {
   @Post('import')
   @RequirePermission('PRODUCT_IMPORT')
   @UseInterceptors(FileInterceptor('file'))
-  async importExcel(
+  importExcel(
     @UploadedFile() file: Express.Multer.File,
     @Req() req: authenticatedUserInterface.AuthenticatedRequest,
   ) {
@@ -178,6 +145,7 @@ export class ProductsController {
     return this.productsService.createManyDirect(batchItems, req.user.sub);
   }
 
+<<<<<<< HEAD
   /**
    * Scanner lookup: exact match on product/variant code, SKU or barcode.
    * Must stay above `:id` so "by-code" is not treated as an id.
@@ -189,8 +157,11 @@ export class ProductsController {
   }
 
   @RequirePermission('PRODUCT_VIEW')
+=======
+  @Public()
+>>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
   @Get(':id')
-  async findOne(@Param('id') id: string) {
+  findOne(@Param('id') id: string) {
     return this.productsService.findOne(id);
   }
 
@@ -214,19 +185,63 @@ export class ProductsController {
 
   @RequirePermission('PRODUCT_DELETE')
   @Delete(':id')
-  async remove(@Param('id') id: string) {
+  remove(@Param('id') id: string) {
     return this.productsService.remove(id);
   }
 
   @RequirePermission('PRODUCT_UPDATE')
   @Patch(':id/deactivate')
-  async deactivate(@Param('id') id: string) {
+  deactivate(@Param('id') id: string) {
     return this.productsService.deactivate(id);
   }
 
   @RequirePermission('PRODUCT_UPDATE')
   @Patch(':id/activate')
-  async activate(@Param('id') id: string) {
+  activate(@Param('id') id: string) {
     return this.productsService.activate(id);
+  }
+
+  /**
+   * Fast Barcode / SKU / QR Scanner Lookup.
+   */
+  @Get('lookup/barcode/:code')
+  lookupByBarcode(@Param('code') code: string) {
+    return this.barcodesService.lookupByBarcode(code);
+  }
+
+  /**
+   * Stream 1D Barcode image (PNG or SVG) for this Product.
+   */
+  @Get(':id/barcode')
+  getBarcode(
+    @Param('id') id: string,
+    @Query() query: Partial<GenerateBarcodeQueryDto>,
+    @Res() res: Response,
+  ) {
+    return this.barcodesService.streamProductBarcode(id, query, res);
+  }
+
+  /**
+   * Stream 2D QR Code image (PNG or SVG) for this Product.
+   */
+  @Get(':id/qrcode')
+  getQrCode(
+    @Param('id') id: string,
+    @Query() query: Partial<GenerateQrQueryDto>,
+    @Res() res: Response,
+  ) {
+    return this.barcodesService.streamProductQr(id, query, res);
+  }
+
+  /**
+   * Stream printable thermal sticker PDF label for this Product.
+   */
+  @Get(':id/label')
+  getLabel(
+    @Param('id') id: string,
+    @Query() query: LabelQueryDto,
+    @Res() res: Response,
+  ) {
+    return this.barcodesService.streamProductLabel(id, query, res);
   }
 }

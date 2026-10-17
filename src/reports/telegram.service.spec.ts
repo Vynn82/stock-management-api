@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { TelegramService } from './telegram.service';
 import { SalesReportPdfService } from './pdf/sales-report-pdf.service';
 import { SalesReport } from './interfaces/report.interface';
+import * as dotenv from 'dotenv';
+dotenv.config();
 
 describe('TelegramService', () => {
   let service: TelegramService;
@@ -47,8 +49,14 @@ describe('TelegramService', () => {
           provide: ConfigService,
           useValue: {
             get: jest.fn((key: string) => {
-              if (key === 'TELEGRAM_BOT_TOKEN') return 'test_bot_token';
-              if (key === 'TELEGRAM_CHAT_ID') return '-123456789';
+              if (key === 'TELEGRAM_BOT_TOKEN')
+                return (process.env.TELEGRAM_BOT_TOKEN || 'mock-bot-token')
+                  .replace(/^["']|["']$/g, '')
+                  .trim();
+              if (key === 'TELEGRAM_CHAT_ID')
+                return (process.env.TELEGRAM_CHAT_ID || 'mock-chat-id')
+                  .replace(/^["']|["']$/g, '')
+                  .trim();
               return null;
             }),
           },
@@ -56,7 +64,9 @@ describe('TelegramService', () => {
         {
           provide: SalesReportPdfService,
           useValue: {
-            generateReportPdf: jest.fn().mockResolvedValue(Buffer.from('%PDF-mock-bytes')),
+            generateReportPdf: jest
+              .fn()
+              .mockResolvedValue(Buffer.from('%PDF-mock-bytes')),
           },
         },
       ],
@@ -77,21 +87,23 @@ describe('TelegramService', () => {
   it('should send both Telegram summary message and PDF document successfully', async () => {
     const mockFetch = jest
       .spyOn(global, 'fetch')
-      .mockImplementation(async (url: any) => {
+      .mockImplementation((url: any) => {
         const urlStr = url.toString();
         if (urlStr.includes('/sendMessage')) {
-          return {
+          return Promise.resolve({
             ok: true,
-            json: async () => ({ ok: true, result: { message_id: 101 } }),
-          } as any;
+            json: () =>
+              Promise.resolve({ ok: true, result: { message_id: 101 } }),
+          } as any);
         }
         if (urlStr.includes('/sendDocument')) {
-          return {
+          return Promise.resolve({
             ok: true,
-            json: async () => ({ ok: true, result: { message_id: 102 } }),
-          } as any;
+            json: () =>
+              Promise.resolve({ ok: true, result: { message_id: 102 } }),
+          } as any);
         }
-        return { ok: false } as any;
+        return Promise.resolve({ ok: false } as any);
       });
 
     const result = await service.sendReport(mockReport);
@@ -103,15 +115,16 @@ describe('TelegramService', () => {
   });
 
   it('should still succeed with summary delivery even if PDF generation throws an error', async () => {
+    jest.spyOn((service as any).logger, 'error').mockImplementation(() => {});
     jest
       .spyOn(pdfService, 'generateReportPdf')
       .mockRejectedValueOnce(new Error('PDF generation engine failed'));
 
-    jest.spyOn(global, 'fetch').mockImplementation(async () => {
-      return {
+    jest.spyOn(global, 'fetch').mockImplementation(() => {
+      return Promise.resolve({
         ok: true,
-        json: async () => ({ ok: true, result: { message_id: 101 } }),
-      } as any;
+        json: () => Promise.resolve({ ok: true, result: { message_id: 101 } }),
+      } as any);
     });
 
     const result = await service.sendReport(mockReport);
@@ -121,21 +134,24 @@ describe('TelegramService', () => {
   });
 
   it('should still succeed with summary delivery if sendDocument fails', async () => {
+    jest.spyOn((service as any).logger, 'error').mockImplementation(() => {});
     jest.spyOn(global, 'fetch').mockImplementation(async (url: any) => {
       const urlStr = url.toString();
       if (urlStr.includes('/sendMessage')) {
-        return {
+        return Promise.resolve({
           ok: true,
-          json: async () => ({ ok: true, result: { message_id: 101 } }),
-        } as any;
+          json: () =>
+            Promise.resolve({ ok: true, result: { message_id: 101 } }),
+        } as any);
       }
       if (urlStr.includes('/sendDocument')) {
-        return {
+        return Promise.resolve({
           ok: false,
-          json: async () => ({ ok: false, description: 'File too large' }),
-        } as any;
+          json: () =>
+            Promise.resolve({ ok: false, description: 'File too large' }),
+        } as any);
       }
-      return { ok: false } as any;
+      return Promise.resolve({ ok: false } as any);
     });
 
     const result = await service.sendReport(mockReport);
@@ -144,4 +160,3 @@ describe('TelegramService', () => {
     expect(result.pdfSent).toBe(false);
   });
 });
-

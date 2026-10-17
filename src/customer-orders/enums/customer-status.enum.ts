@@ -1,0 +1,7 @@
+export enum CustomerStatus {
+  PENDING = 'PENDING',
+  ACTIVE = 'ACTIVE',
+  REJECTED = 'REJECTED',
+  SUSPENDED = 'SUSPENDED',
+  BLOCKED = 'BLOCKED',
+}

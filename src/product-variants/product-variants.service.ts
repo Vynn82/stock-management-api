@@ -10,6 +10,7 @@ import { Repository } from 'typeorm';
 
 import { ProductVariant } from './entities/product-variant.entity';
 import { Product } from '../products/entities/product.entity';
+import { BarcodesService } from '../barcodes/barcodes.service';
 
 import { CreateProductVariantDto } from './dto/create-product-variant.dto';
 import { UpdateProductVariantDto } from './dto/update-product-variant.dto';
@@ -18,6 +19,7 @@ import {
   createPaginatedResult,
   getPaginationOptions,
 } from '../common/pagination';
+import { deleteCloudinaryImage } from '../common/cloudinary/cloudinary.utils';
 
 @Injectable()
 export class ProductVariantsService {
@@ -27,6 +29,8 @@ export class ProductVariantsService {
 
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
+
+    private readonly barcodesService: BarcodesService,
   ) {}
 
   // =====================================================
@@ -71,10 +75,13 @@ export class ProductVariantsService {
       throw new ConflictException('Variant code already exists');
     }
 
-    if (dto.barcode) {
+    let barcode = dto.barcode;
+    if (!barcode || (typeof barcode === 'string' && !barcode.trim())) {
+      barcode = await this.barcodesService.generateUniqueBarcode();
+    } else {
       const existingBarcode = await this.variantRepository.findOne({
         where: {
-          barcode: dto.barcode,
+          barcode,
         },
       });
 
@@ -87,7 +94,7 @@ export class ProductVariantsService {
       ...dto,
       code,
       sku: dto.sku.toUpperCase(),
-      barcode: dto.barcode ?? null,
+      barcode: barcode ?? null,
       attributes: dto.attributes ?? null,
       costPrice: dto.costPrice ?? null,
       sellingPrice: dto.sellingPrice ?? null,
@@ -256,14 +263,25 @@ export class ProductVariantsService {
 
   async remove(id: string) {
     const variant = await this.findOne(id);
+    const imageUrlToDelete = variant.image;
 
     try {
       await this.variantRepository.remove(variant);
+
+      if (imageUrlToDelete) {
+        await deleteCloudinaryImage(imageUrlToDelete);
+      }
+
       return {
         message: 'Product variant deleted successfully',
       };
     } catch (error) {
-      if (error?.code === '23503') {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === '23503'
+      ) {
         throw new BadRequestException(
           'Cannot delete product variant because it is referenced by transactions or stock history. Consider deactivating it instead.',
         );

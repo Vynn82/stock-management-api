@@ -4,11 +4,10 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 
 import { User } from './entities/user.entity';
@@ -186,7 +185,7 @@ export class UsersService {
         staffId,
         temporaryPassword,
       );
-    } catch (error:any) {
+    } catch (error: any) {
       console.error('Failed to send welcome email:', error.message);
     }
 

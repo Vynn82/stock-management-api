@@ -162,7 +162,7 @@ export class ProductsExcelService {
       header: 1,
       defval: null,
       raw: false,
-    }) as unknown[][];
+    });
 
     if (!rawRows || rawRows.length === 0) {
       throw new BadRequestException('Excel file is empty');
@@ -192,8 +192,8 @@ export class ProductsExcelService {
       );
     }
 
-    const rawHeaders = rawRows[headerRowIndex] as unknown[];
-    const headers = rawHeaders.map((h) =>
+    const rawHeaders = (rawRows[headerRowIndex] ?? []) as any[];
+    const headers = rawHeaders.map((h: any) =>
       String(h ?? '')
         .trim()
         .toLowerCase(),
@@ -211,15 +211,15 @@ export class ProductsExcelService {
     }
 
     // Process data rows
-    const dataRows = rawRows
+    const dataRows = (rawRows as any[][])
       .slice(headerRowIndex + 1)
-      .map((row, idx) => ({
+      .map((row: any, idx: number) => ({
         rowNumber: headerRowIndex + 1 + idx + 1,
-        values: row as unknown[],
+        values: (row || []) as any[],
       }))
       .filter(({ values }) =>
         values.some(
-          (val) =>
+          (val: any) =>
             val !== null && val !== undefined && String(val).trim() !== '',
         ),
       );

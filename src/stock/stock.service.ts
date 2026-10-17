@@ -4,7 +4,7 @@ import { UpdateStockDto } from './dto/update-stock.dto';
 
 @Injectable()
 export class StockService {
-  create(createStockDto: CreateStockDto) {
+  create(_createStockDto: CreateStockDto) {
     return 'This action adds a new stock';
   }
 
@@ -16,7 +16,7 @@ export class StockService {
     return `This action returns a #${id} stock`;
   }
 
-  update(id: number, updateStockDto: UpdateStockDto) {
+  update(id: number, _updateStockDto: UpdateStockDto) {
     return `This action updates a #${id} stock`;
   }
 

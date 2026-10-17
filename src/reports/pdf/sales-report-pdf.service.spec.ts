@@ -2,8 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { SalesReportPdfService } from './sales-report-pdf.service';
 import { SalesReport } from '../interfaces/report.interface';
-import * as fs from 'fs';
-import * as path from 'path';
 
 describe('SalesReportPdfService', () => {
   let service: SalesReportPdfService;
@@ -190,7 +188,9 @@ describe('SalesReportPdfService', () => {
   it('should generate a valid PDF buffer even when logo path does not exist', async () => {
     jest
       .spyOn(configService, 'get')
-      .mockImplementation((key: string) => (key === 'REPORT_LOGO_PATH' ? 'nonexistent/logo.png' : null));
+      .mockImplementation((key: string) =>
+        key === 'REPORT_LOGO_PATH' ? 'nonexistent/logo.png' : null,
+      );
 
     const buffer = await service.generateReportPdf(mockReport);
     expect(buffer).toBeInstanceOf(Buffer);
@@ -263,4 +263,3 @@ describe('SalesReportPdfService', () => {
     expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
   });
 });
-

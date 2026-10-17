@@ -14,6 +14,7 @@ import { MailsService } from '../mails/mails.service';
 import { Mail } from '../mails/entities/mail.entity';
 import { Stock } from '../stock/entities/stock.entity';
 import { StockAdjustment } from '../stock-adjustments/entities/stock-adjustment.entity';
+import { BarcodesModule } from '../barcodes/barcodes.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { StockAdjustment } from '../stock-adjustments/entities/stock-adjustment.
       Stock,
       StockAdjustment,
     ]),
+    BarcodesModule,
   ],
 
   controllers: [RequestsController],

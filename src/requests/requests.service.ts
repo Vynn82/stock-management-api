@@ -15,9 +15,6 @@ import {
 } from 'typeorm';
 
 import { CreateRequestDto } from './dto/create-request.dto';
-import { CreateRequestProductDto } from './dto/create-request-product.dto';
-import { CreateRequestVariantDto } from './dto/create-request-variant.dto';
-import { CreateRequestStockDto } from './dto/create-request-stock.dto';
 import { CommitAction, CommitRequestDto } from './dto/commit-request.dto';
 
 import { Request } from './entities/request.entity';
@@ -48,6 +45,10 @@ import {
   getPaginationOptions,
 } from '../common/pagination';
 
+import { RequestsExcelService } from './requests-excel.service';
+import { RequestImportTemplateService } from './request-import-template.service';
+import { BarcodesService } from '../barcodes/barcodes.service';
+
 @Injectable()
 export class RequestsService {
   constructor(
@@ -57,7 +58,34 @@ export class RequestsService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly mailService: MailsService,
+    private readonly requestsExcelService: RequestsExcelService,
+    private readonly requestImportTemplateService: RequestImportTemplateService,
+    private readonly barcodesService: BarcodesService,
   ) {}
+
+  generateTemplate(requestType: RequestType) {
+    return this.requestImportTemplateService.generateTemplate(requestType);
+  }
+
+  async importFromExcel(
+    file: Express.Multer.File,
+    requestType: RequestType,
+    approversRaw: any,
+    userId: string,
+  ) {
+    const dto = this.requestsExcelService.importExcel(file, requestType);
+    if (approversRaw) {
+      try {
+        dto.approvers =
+          typeof approversRaw === 'string'
+            ? JSON.parse(approversRaw)
+            : approversRaw;
+      } catch {
+        // Ignore JSON parse error, keep previous dto.approvers
+      }
+    }
+    return this.create(dto, userId, RequestSource.EXCEL);
+  }
 
   async findAll(userId: string, paginationDto?: PaginationDto) {
     const { limit, skip } = getPaginationOptions(paginationDto);
@@ -110,6 +138,56 @@ export class RequestsService {
     }
 
     return this.formatRequestResponse(request, userId);
+  }
+
+  async createFromMultipart(
+    body: any,
+    files: Express.Multer.File[],
+    userId: string,
+  ) {
+    const parseJson = (val: any) => {
+      if (typeof val === 'string') {
+        try {
+          return JSON.parse(val);
+        } catch {
+          return val;
+        }
+      }
+      return val;
+    };
+
+    const createRequestDto: CreateRequestDto = {
+      requestType: body.requestType ?? body.type,
+      product: body.product ? parseJson(body.product) : undefined,
+      variants: body.variants ? parseJson(body.variants) : undefined,
+      stock: body.stock ? parseJson(body.stock) : undefined,
+      adjustments: body.adjustments ? parseJson(body.adjustments) : undefined,
+      approvers: body.approvers ? parseJson(body.approvers) : [],
+      remark: body.remark ?? null,
+    };
+
+    let productImageUrl: string | undefined;
+    const variantImageUrls: Record<string, string> = {};
+
+    for (const file of files ?? []) {
+      if (file.fieldname === 'image') {
+        productImageUrl = file.path;
+        continue;
+      }
+
+      const match = file.fieldname.match(/^variantImage\[(.+)\]$/);
+      if (match) {
+        variantImageUrls[match[1]] = file.path;
+      }
+    }
+
+    return this.create(
+      createRequestDto,
+      userId,
+      RequestSource.MANUAL,
+      productImageUrl,
+      variantImageUrls,
+    );
   }
 
   async create(
@@ -468,12 +546,7 @@ export class RequestsService {
       );
 
       // Create stock
-      const stocks = await this.createStocksFromRequest(
-        manager,
-        request,
-        product,
-        variants,
-      );
+      await this.createStocksFromRequest(manager, request, product, variants);
 
       request.status = RequestStatus.APPROVED;
 
@@ -797,12 +870,6 @@ export class RequestsService {
 
         case RequestType.STOCK_ADJUSTMENT: {
           await this.adjustStockFromRequest(manager, request);
-          break;
-        }
-
-        case RequestType.STOCK_ADJUSTMENT: {
-          await this.adjustStockFromRequest(manager, request);
-
           break;
         }
 
@@ -1574,7 +1641,7 @@ export class RequestsService {
     item.variantImage = variantImageUrl ?? null;
     item.variantCostPrice =
       variant?.variantCostPrice ??
-      (variant as any)?.basePrice ??
+      variant?.basePrice ??
       stock?.variantCostPrice ??
       stock?.variantBasePrice ??
       stock?.costPrice ??
@@ -1582,7 +1649,7 @@ export class RequestsService {
       null;
     item.variantSellingPrice =
       variant?.variantSellingPrice ??
-      (variant as any)?.sellingPrice ??
+      variant?.sellingPrice ??
       stock?.variantSellingPrice ??
       stock?.sellingPrice ??
       null;
@@ -2023,6 +2090,11 @@ export class RequestsService {
     // 6. CREATE NEW PRODUCT
     // =====================================================
 
+    let barcode = item.productBarcode;
+    if (!barcode || (typeof barcode === 'string' && !barcode.trim())) {
+      barcode = await this.barcodesService.generateUniqueBarcode();
+    }
+
     product = manager.create(Product, {
       code: item.productCode,
       name: item.productName,
@@ -2036,8 +2108,13 @@ export class RequestsService {
       hasVariants: item.hasVariants,
       unit: item.unit,
 
+<<<<<<< HEAD
       sku: productSku,
       barcode: item.productBarcode,
+=======
+      sku: item.productSku,
+      barcode,
+>>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
 
       costPrice: item.productCostPrice ?? 0,
       sellingPrice: item.productSellingPrice ?? 0,
@@ -2110,14 +2187,24 @@ export class RequestsService {
       // CREATE NEW VARIANT
       // =====================================================
 
+      let vBarcode = item.variantBarcode;
+      if (!vBarcode || (typeof vBarcode === 'string' && !vBarcode.trim())) {
+        vBarcode = await this.barcodesService.generateUniqueBarcode();
+      }
+
       variant = manager.create(ProductVariant, {
         productId: product.id,
 
         code: item.variantCode!,
         name: item.variantName ?? '',
 
+<<<<<<< HEAD
         sku: variantSku,
         barcode: item.variantBarcode,
+=======
+        sku: item.variantSku!,
+        barcode: vBarcode,
+>>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
 
         attributes: item.variantAttributes,
         image: item.variantImage,

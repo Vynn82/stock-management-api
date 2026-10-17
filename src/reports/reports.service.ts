@@ -297,7 +297,7 @@ export class ReportsService {
       },
     });
 
-    let totalAdjustments = stockAdjustments.length;
+    const totalAdjustments = stockAdjustments.length;
     let netQuantity = 0;
     let totalDecreaseQuantity = 0;
     let totalDecreaseValue = 0;

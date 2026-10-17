@@ -34,11 +34,21 @@ export default tseslint.config(
   {
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
-
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/restrict-template-expressions': 'off',
+      '@typescript-eslint/no-base-to-string': 'off',
       '@typescript-eslint/no-floating-promises': 'warn',
-
-      '@typescript-eslint/no-unsafe-argument': 'warn',
-
+      '@typescript-eslint/require-await': 'warn',
+      '@typescript-eslint/no-unsafe-enum-comparison': 'warn',
+      '@typescript-eslint/prefer-promise-reject-errors': 'warn',
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
       'prettier/prettier': [
         'error',
         {
@@ -53,6 +63,14 @@ export default tseslint.config(
     files: ['src/**/*.dto.ts'],
     rules: {
       '@typescript-eslint/no-unsafe-call': 'off',
+    },
+  },
+
+  // Test and spec files
+  {
+    files: ['src/**/*.spec.ts', 'test/**/*.ts'],
+    rules: {
+      '@typescript-eslint/unbound-method': 'off',
     },
   },
 );

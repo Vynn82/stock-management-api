@@ -4,6 +4,7 @@ import type { Request } from 'express';
 import type { StorageEngine } from 'multer';
 import cloudinary, { isCloudinaryConfigured } from './cloudinary.config';
 
+<<<<<<< HEAD
 const ALLOWED_MIME = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
 
@@ -76,3 +77,20 @@ export const imageUploadOptions = {
     cb(null, true);
   },
 };
+=======
+export const productStorage = new CloudinaryStorage({
+  cloudinary,
+  params: () => ({
+    folder: 'stock-management/products',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+  }),
+});
+
+export const variantStorage = new CloudinaryStorage({
+  cloudinary,
+  params: () => ({
+    folder: 'stock-management/product-variants',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+  }),
+});
+>>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5

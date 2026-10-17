@@ -21,10 +21,12 @@ import { Warehouse } from '../warehouses/entities/warehouse.entity';
 import { ProductDirectCreateBatchItem } from './products-excel.service';
 import { ProductFilterDto } from './dto/product-filter.dto';
 import {
-  PaginationDto,
   createPaginatedResult,
   getPaginationOptions,
 } from '../common/pagination';
+import { deleteMultipleCloudinaryImages } from '../common/cloudinary/cloudinary.utils';
+
+import { BarcodesService } from '../barcodes/barcodes.service';
 
 @Injectable()
 export class ProductsService {
@@ -32,6 +34,7 @@ export class ProductsService {
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
     private readonly dataSource: DataSource,
+    private readonly barcodesService: BarcodesService,
   ) {}
 
   async findAll(filterDto?: ProductFilterDto) {
@@ -263,8 +266,22 @@ export class ProductsService {
   async remove(id: string) {
     const product = await this.findOne(id);
 
+    // Collect all associated Cloudinary images to clean up
+    const imageUrlsToDelete: (string | null | undefined)[] = [product.image];
+    if (product.variants?.length) {
+      for (const variant of product.variants) {
+        if (variant.image) {
+          imageUrlsToDelete.push(variant.image);
+        }
+      }
+    }
+
     try {
       await this.productRepository.remove(product);
+
+      // Clean up Cloudinary assets in background after successful DB deletion
+      await deleteMultipleCloudinaryImages(imageUrlsToDelete);
+
       return {
         message: 'Product deleted successfully',
       };
@@ -317,6 +334,52 @@ export class ProductsService {
     };
   }
 
+  async createFromMultipart(
+    body: any,
+    files: Express.Multer.File[],
+    userId: string,
+  ) {
+    const parseField = (field: any) => {
+      if (typeof field === 'string') {
+        try {
+          return JSON.parse(field);
+        } catch {
+          return field;
+        }
+      }
+      return field;
+    };
+
+    const product =
+      parseField(body.product) ?? (body.productCode ? body : undefined);
+    const variants = parseField(body.variants);
+    const stock = parseField(body.stock);
+
+    const dto = {
+      product,
+      variants,
+      stock,
+      remark: body.remark ?? null,
+    };
+
+    let productImageUrl: string | undefined;
+    const variantImageUrls: Record<string, string> = {};
+
+    for (const file of files ?? []) {
+      if (file.fieldname === 'image') {
+        productImageUrl = file.path;
+        continue;
+      }
+
+      const match = file.fieldname.match(/^variantImage\[(.+)\]$/);
+      if (match) {
+        variantImageUrls[match[1]] = file.path;
+      }
+    }
+
+    return this.createDirect(dto, userId, productImageUrl, variantImageUrls);
+  }
+
   async createDirect(
     dto: any,
     userId: string,
@@ -340,7 +403,7 @@ export class ProductsService {
 
   async createManyDirect(
     batchItems: ProductDirectCreateBatchItem[],
-    userId?: string,
+    _userId?: string,
   ) {
     if (!batchItems || batchItems.length === 0) {
       throw new BadRequestException('No products to import');
@@ -508,8 +571,16 @@ export class ProductsService {
     const hasVariants =
       productData.hasVariants === true || productData.hasVariants === 'true';
     const unit = productData.unit;
+<<<<<<< HEAD
     let sku: string | undefined = productData.productSku ?? productData.sku;
     const barcode = productData.productBarcode ?? productData.barcode ?? null;
+=======
+    const sku = productData.productSku ?? productData.sku;
+    let barcode = productData.productBarcode ?? productData.barcode ?? null;
+    if (!barcode || (typeof barcode === 'string' && !barcode.trim())) {
+      barcode = await this.barcodesService.generateUniqueBarcode();
+    }
+>>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
     const costPrice = Number(
       productData.productCostPrice ?? productData.costPrice ?? 0,
     );
@@ -656,8 +727,16 @@ export class ProductsService {
       const vCode =
         v.variantCode ?? v.code ?? `${code}-V${savedVariants.length + 1}`;
       const vName = v.variantName ?? v.name;
+<<<<<<< HEAD
       const vSku = v.variantSku ?? v.sku ?? `${sku}-V${savedVariants.length + 1}`;
       const vBarcode = v.variantBarcode ?? v.barcode ?? null;
+=======
+      const vSku = v.variantSku ?? v.sku;
+      let vBarcode = v.variantBarcode ?? v.barcode ?? null;
+      if (!vBarcode || (typeof vBarcode === 'string' && !vBarcode.trim())) {
+        vBarcode = await this.barcodesService.generateUniqueBarcode();
+      }
+>>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
       const vAttributes = v.variantAttributes ?? v.attributes ?? null;
       const vCostPrice =
         v.variantCostPrice !== undefined &&

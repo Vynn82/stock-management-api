@@ -8,10 +8,22 @@ describe('StockAdjustmentsController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [StockAdjustmentsController],
-      providers: [StockAdjustmentsService],
+      providers: [
+        {
+          provide: StockAdjustmentsService,
+          useValue: {
+            adjustDirect: jest.fn(),
+            findAll: jest.fn(),
+            findOne: jest.fn(),
+            exportAdjustments: jest.fn(),
+          },
+        },
+      ],
     }).compile();
 
-    controller = module.get<StockAdjustmentsController>(StockAdjustmentsController);
+    controller = module.get<StockAdjustmentsController>(
+      StockAdjustmentsController,
+    );
   });
 
   it('should be defined', () => {
