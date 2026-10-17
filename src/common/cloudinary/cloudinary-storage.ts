@@ -3,7 +3,7 @@ import cloudinary from './cloudinary.config';
 
 export const productStorage = new CloudinaryStorage({
   cloudinary,
-  params: async () => ({
+  params: () => ({
     folder: 'stock-management/products',
     allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
   }),
@@ -11,7 +11,7 @@ export const productStorage = new CloudinaryStorage({
 
 export const variantStorage = new CloudinaryStorage({
   cloudinary,
-  params: async () => ({
+  params: () => ({
     folder: 'stock-management/product-variants',
     allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
   }),

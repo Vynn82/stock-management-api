@@ -5,7 +5,6 @@ import { IsNull, Repository } from 'typeorm';
 import * as crypto from 'crypto';
 
 import { Session } from './entities/session.entity';
-import { isNil } from '@nestjs/common/utils/shared.utils';
 
 @Injectable()
 export class SessionsService {

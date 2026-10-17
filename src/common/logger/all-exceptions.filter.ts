@@ -15,7 +15,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
-    const requestId = (request as any).requestId || request.headers['x-request-id'] || 'unknown';
+    const requestId =
+      (request as any).requestId ||
+      request.headers['x-request-id'] ||
+      'unknown';
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message: any = 'Internal server error';
@@ -36,7 +39,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
     }
 
     const user = (request as any).user;
-    const userId = user ? (user.staffId || user.sub || user.telegramUserId || user.id) : 'anonymous';
+    const userId = user
+      ? user.staffId || user.sub || user.telegramUserId || user.id
+      : 'anonymous';
 
     const stack = exception instanceof Error ? exception.stack : undefined;
 

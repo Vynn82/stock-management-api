@@ -45,6 +45,12 @@ A comprehensive guide and reference for all endpoints, authentication rules, glo
     - [21.5 Top-Selling Products](#215-top-selling-products)
     - [21.6 Urgent Low-Stock Alerts](#216-urgent-low-stock-alerts)
     - [21.7 Recent Orders & Stock Adjustments](#217-recent-orders--stock-adjustments)
+22. [Barcodes, QR Codes & Printable Labels API (`/barcodes`, `/products`, `/product-variants`)](#22-barcodes-qr-codes--printable-labels-api)
+    - [22.1 Fast Scanner Resolution / Lookup](#221-fast-scanner-resolution--lookup)
+    - [22.2 Product-Specific Barcodes & QR Codes](#222-product-specific-barcodes--qr-codes)
+    - [22.3 Product Variant-Specific Barcodes & QR Codes](#223-product-variant-specific-barcodes--qr-codes)
+    - [22.4 Printable Thermal PDF Labels](#224-printable-thermal-pdf-labels)
+    - [22.5 Automatic Barcode Generation & Real-time QR Synchronization](#225-automatic-barcode-generation--real-time-qr-synchronization)
 
 ---
 
@@ -63,9 +69,9 @@ Content-Type: application/json
 
 ### 📮 Postman Collection
 
-A ready-to-import Postman Collection v2.1.0 is available at [`postman_collection.json`](file:///d:/Coding_D/stock-management-api/postman_collection.json) in the project root:
+A ready-to-import Postman Collection v2.1.0 is available at [`postman_collection.json`](file:///d:/ACLEDA/Y4-S1/Project%20Management/stock-management-api/postman_collection.json) in the project root:
 
-- **130 pre-configured requests** categorized across 17 folders matching this documentation.
+- **123 pre-configured requests** categorized across 19 folders matching this documentation.
 - Built-in `{{baseUrl}}` variable pointing to `http://localhost:3000`.
 - **Automatic Token Handling**: Running `POST /auth/login` extracts staff `accessToken`, and `POST /customer-auth/telegram` extracts `customerToken`.
 - All subsequent protected requests inherit the respective Bearer tokens automatically.
@@ -1378,6 +1384,9 @@ Direct stock adjustment allows **`ADMIN`** and **`SUPER_ADMIN`** to adjust physi
 
 **Single Item Payload Example**:
 
+> [!TIP]
+> `productCode` and `variantCode` accept **Raw Scanned Barcodes** (e.g. `2008491028371`), **SKUs**, **Product Codes**, or **UUIDs**, allowing direct integration with scanner hardware.
+
 ```json
 {
   "productCode": "IMP-PROD-49496",
@@ -2052,7 +2061,7 @@ Customer registration **does NOT require staff approval**.
 
 1. **Strict Quantity Invariant**:
    At all stages of order review and stock allocation:
-   $$\text{approvedQuantity} + \text{waitingQuantity} \le \text{requestedQuantity}$$
+   $\text{approvedQuantity} + \text{waitingQuantity} \le \text{requestedQuantity}$
    Any operation attempting to allocate more than the requested quantity throws `400 Bad Request`.
 
 2. **Official Pricing Guarantee**:
@@ -2426,4 +2435,112 @@ Returns products needing immediate replenishment: items with 0 stock (`OUT_OF_ST
 - **Recent Stock Adjustments**: `GET /dashboard/recent-adjustments?limit=10`
 - **Access**: Authenticated Staff
 
+---
+
+## 22. Barcodes, QR Codes & Printable Labels API
+
+Comprehensive barcode generation (1D Code128, EAN-13, Code39), 2D QR code generation, instant scanner resolution lookup, and printable thermal sticker PDF labels for products and variants.
+
+### 22.1 Fast Scanner Resolution / Lookup
+
+Resolves any scanned barcode, SKU, product code, or variant code. Returns full product/variant data, category/brand metadata, live multi-warehouse stock balances, and embedded Base64 barcode/QR previews.
+
+- **Endpoint**: `GET /barcodes/lookup/:code` (or `GET /products/lookup/barcode/:code`)
+- **Access**: Authenticated
+
+#### Example Request:
+```http
+GET /barcodes/lookup/8851234567890
+```
+
+#### Response (`200 OK`):
+```json
+{
+  "matchType": "PRODUCT",
+  "product": {
+    "id": "0f89d6c8-8bc4-4592-9cba-25d57bfb112b",
+    "code": "IPHONE-16-PRO",
+    "name": "Apple iPhone 16 Pro",
+    "category": "Smartphones",
+    "brand": "Apple",
+    "supplier": "Apple Official Supply",
+    "unit": "Piece",
+    "sku": "IP16P-SKU-001",
+    "barcode": "8851234567890",
+    "costPrice": 850.00,
+    "sellingPrice": 1099.00,
+    "minimumStock": 10,
+    "maximumStock": 100,
+    "hasVariants": true,
+    "image": "https://res.cloudinary.com/.../image.jpg",
+    "isActive": true
+  },
+  "variantsCount": 3,
+  "inventory": {
+    "totalStock": 45,
+    "warehouses": [
+      {
+        "warehouseId": "a57bb815-bbf0-42cf-bb52-f6733230c1be",
+        "warehouseCode": "WH-MAIN",
+        "warehouseName": "Phnom Penh Central Warehouse",
+        "variantId": null,
+        "quantity": 45
+      }
+    ]
+  },
+  "barcodes": {
+    "barcodeValue": "8851234567890",
+    "barcodePng": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg...",
+    "qrPng": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg..."
+  }
+}
+```
+
+---
+
+### 22.2 Product-Specific Barcodes & QR Codes
+
+> [!NOTE]
+> `:id` can be either the Product UUID (e.g. `00e60628-471c-489d-b1d4-6107555228be`) or the unique Product Code (e.g. `IPHONE-16-PRO`), SKU, or Barcode.
+
+| Method | Endpoint | Query Options | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/products/:id/barcode` | `?format=png\|svg&scale=3&height=10` | Stream 1D barcode image for product |
+| `GET` | `/products/:id/qrcode` | `?format=png\|svg&width=300` | Stream 2D QR code image for product |
+| `GET` | `/products/:id/label` | `?copies=1&includePrice=true` | Stream printable thermal sticker PDF label |
+
+---
+
+### 22.3 Product Variant-Specific Barcodes & QR Codes
+
+> [!NOTE]
+> `:id` can be either the Variant UUID, Variant Code (e.g. `IP16P-256-BLK`), SKU, or Barcode.
+
+| Method | Endpoint | Query Options | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/product-variants/:id/barcode` | `?format=png\|svg&scale=3&height=10` | Stream 1D barcode image for variant |
+| `GET` | `/product-variants/:id/qrcode` | `?format=png\|svg&width=300` | Stream 2D QR code image for variant |
+| `GET` | `/product-variants/:id/label` | `?copies=1&includePrice=true` | Stream printable thermal sticker PDF label |
+
+---
+
+### 22.4 Printable Thermal PDF Labels
+
+- **Dimensions**: Standard 55mm × 35mm thermal barcode sticker (160 × 100 pt).
+- **Layout**:
+  - Top: Brand & Category badge.
+  - Header: Product / Variant Name.
+  - Left: Crisp 1D Code128 barcode with human-readable text.
+  - Right: High-density 2D QR code.
+  - Bottom Banner: SKU, Attributes/Unit, and bold Selling Price in Green.
+- **Multiple Copies**: Pass `?copies=5` to generate a 5-page print job ready for direct thermal label printers.
+
+---
+
+### 22.5 Automatic Barcode Generation & Real-time QR Synchronization
+
+1. **Auto-Generated Barcode Numbers**:
+   - When creating a product or variant (via direct API creation, multipart upload, Excel batch import, or approved Maker-Checker workflow), if the `barcode` property is empty or omitted, the system automatically assigns a unique, standard 13-digit EAN-13 barcode number with Modulo-10 checksum algorithm (Prefix `200...`).
+2. **Real-time Dynamic QR Synchronization**:
+   - QR codes and barcodes are computed on-demand from the product / variant database state. Whenever product details, prices, or attributes are updated, all barcode/QR streams and printable labels immediately render the updated state without needing storage migration or batch re-generation.
 

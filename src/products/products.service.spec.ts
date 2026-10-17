@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { ProductsService } from './products.service';
 import { Product } from './entities/product.entity';
+import { BarcodesService } from '../barcodes/barcodes.service';
 
 describe('ProductsService', () => {
   let service: ProductsService;
@@ -34,6 +35,14 @@ describe('ProductsService', () => {
           useValue: {
             transaction: jest.fn(),
             createQueryRunner: jest.fn(),
+          },
+        },
+        {
+          provide: BarcodesService,
+          useValue: {
+            lookupByBarcode: jest.fn(),
+            generateBarcodePng: jest.fn(),
+            generateQrPng: jest.fn(),
           },
         },
       ],

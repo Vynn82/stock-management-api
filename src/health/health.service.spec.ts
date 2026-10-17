@@ -9,10 +9,14 @@ describe('HealthService', () => {
     isInitialized: true,
     query: jest.fn().mockImplementation((q: string) => {
       if (q.includes('SELECT 1')) return Promise.resolve([{ '?column?': 1 }]);
-      if (q.includes('SELECT version()')) return Promise.resolve([{ version: 'PostgreSQL 16.15' }]);
-      if (q.includes('pg_size_pretty')) return Promise.resolve([{ size: '10 MB' }]);
-      if (q.includes('pg_stat_activity')) return Promise.resolve([{ active_connections: 3 }]);
-      if (q.includes('information_schema.tables')) return Promise.resolve([{ table_count: 28 }]);
+      if (q.includes('SELECT version()'))
+        return Promise.resolve([{ version: 'PostgreSQL 16.15' }]);
+      if (q.includes('pg_size_pretty'))
+        return Promise.resolve([{ size: '10 MB' }]);
+      if (q.includes('pg_stat_activity'))
+        return Promise.resolve([{ active_connections: 3 }]);
+      if (q.includes('information_schema.tables'))
+        return Promise.resolve([{ table_count: 28 }]);
       return Promise.resolve([]);
     }),
   };

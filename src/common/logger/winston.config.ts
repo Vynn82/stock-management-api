@@ -31,25 +31,31 @@ winston.addColors(colors);
 const fileFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
   winston.format.errors({ stack: true }),
-  winston.format.printf(({ timestamp, level, message, context, requestId, stack, ...meta }) => {
-    const ctx = context ? `[${context}]` : '[App]';
-    const reqId = requestId ? `[Req:${requestId}]` : '';
-    const metaStr = Object.keys(meta).length ? ` | meta: ${JSON.stringify(meta)}` : '';
-    const stackStr = stack ? `\nStack: ${stack}` : '';
-    return `${timestamp} [${level.toUpperCase().padEnd(5)}] ${ctx} ${reqId} ${message}${metaStr}${stackStr}`;
-  }),
+  winston.format.printf(
+    ({ timestamp, level, message, context, requestId, stack, ...meta }) => {
+      const ctx = context ? `[${context}]` : '[App]';
+      const reqId = requestId ? `[Req:${requestId}]` : '';
+      const metaStr = Object.keys(meta).length
+        ? ` | meta: ${JSON.stringify(meta)}`
+        : '';
+      const stackStr = stack ? `\nStack: ${stack}` : '';
+      return `${timestamp} [${level.toUpperCase().padEnd(5)}] ${ctx} ${reqId} ${message}${metaStr}${stackStr}`;
+    },
+  ),
 );
 
 // Format for console logs (colorized)
 const consoleFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
   winston.format.colorize({ all: true }),
-  winston.format.printf(({ timestamp, level, message, context, requestId, stack }) => {
-    const ctx = context ? `[${context}]` : '';
-    const reqId = requestId ? `(${requestId})` : '';
-    const stackStr = stack ? `\n${stack}` : '';
-    return `${timestamp} ${level} ${ctx} ${reqId} ${message}${stackStr}`;
-  }),
+  winston.format.printf(
+    ({ timestamp, level, message, context, requestId, stack }) => {
+      const ctx = context ? `[${context}]` : '';
+      const reqId = requestId ? `(${requestId})` : '';
+      const stackStr = stack ? `\n${stack}` : '';
+      return `${timestamp} ${level} ${ctx} ${reqId} ${message}${stackStr}`;
+    },
+  ),
 );
 
 export const winstonLogger = winston.createLogger({

@@ -23,6 +23,7 @@ import { MailsModule } from './mails/mails.module';
 import { StockModule } from './stock/stock.module';
 import { StockAdjustmentsModule } from './stock-adjustments/stock-adjustments.module';
 import { ReportsModule } from './reports/reports.module';
+import { BarcodesModule } from './barcodes/barcodes.module';
 import { CustomerOrdersModule } from './customer-orders/customer-orders.module';
 import { HealthModule } from './health/health.module';
 import { DashboardModule } from './dashboard/dashboard.module';
@@ -94,6 +95,8 @@ import { DashboardModule } from './dashboard/dashboard.module';
     StockAdjustmentsModule,
 
     ReportsModule,
+
+    BarcodesModule,
     CustomerOrdersModule,
     LoggerModule,
     HealthModule,
@@ -105,4 +108,3 @@ export class AppModule implements NestModule {
     consumer.apply(HttpLoggerMiddleware).forRoutes('*');
   }
 }
-

@@ -12,7 +12,6 @@ import { CustomerOrdersService } from './customer-orders.service';
 import { TelegramAuthService } from './telegram/telegram-auth.service';
 import { CustomerJwtGuard } from './guards/customer-jwt.guard';
 import { Public } from '../auth/decorators/public.decorator';
-import { TelegramAuthDto } from './dto/telegram-auth.dto';
 import { CreateCustomerOrderDto } from './dto/create-customer-order.dto';
 import {
   AskCustomerDto,
@@ -24,7 +23,6 @@ import {
 } from './dto/customer-order-actions.dto';
 import {
   CustomerQueryDto,
-  CustomerRegisterDto,
   RejectCustomerRegistrationDto,
 } from './dto/customer-registration.dto';
 import { CreateStaffCustomerOrderDto } from './dto/create-staff-customer-order.dto';

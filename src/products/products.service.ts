@@ -21,11 +21,12 @@ import { Warehouse } from '../warehouses/entities/warehouse.entity';
 import { ProductDirectCreateBatchItem } from './products-excel.service';
 import { ProductFilterDto } from './dto/product-filter.dto';
 import {
-  PaginationDto,
   createPaginatedResult,
   getPaginationOptions,
 } from '../common/pagination';
 import { deleteMultipleCloudinaryImages } from '../common/cloudinary/cloudinary.utils';
+
+import { BarcodesService } from '../barcodes/barcodes.service';
 
 @Injectable()
 export class ProductsService {
@@ -33,6 +34,7 @@ export class ProductsService {
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
     private readonly dataSource: DataSource,
+    private readonly barcodesService: BarcodesService,
   ) {}
 
   async findAll(filterDto?: ProductFilterDto) {
@@ -179,6 +181,52 @@ export class ProductsService {
     };
   }
 
+  async createFromMultipart(
+    body: any,
+    files: Express.Multer.File[],
+    userId: string,
+  ) {
+    const parseField = (field: any) => {
+      if (typeof field === 'string') {
+        try {
+          return JSON.parse(field);
+        } catch {
+          return field;
+        }
+      }
+      return field;
+    };
+
+    const product =
+      parseField(body.product) ?? (body.productCode ? body : undefined);
+    const variants = parseField(body.variants);
+    const stock = parseField(body.stock);
+
+    const dto = {
+      product,
+      variants,
+      stock,
+      remark: body.remark ?? null,
+    };
+
+    let productImageUrl: string | undefined;
+    const variantImageUrls: Record<string, string> = {};
+
+    for (const file of files ?? []) {
+      if (file.fieldname === 'image') {
+        productImageUrl = file.path;
+        continue;
+      }
+
+      const match = file.fieldname.match(/^variantImage\[(.+)\]$/);
+      if (match) {
+        variantImageUrls[match[1]] = file.path;
+      }
+    }
+
+    return this.createDirect(dto, userId, productImageUrl, variantImageUrls);
+  }
+
   async createDirect(
     dto: any,
     userId: string,
@@ -202,7 +250,7 @@ export class ProductsService {
 
   async createManyDirect(
     batchItems: ProductDirectCreateBatchItem[],
-    userId?: string,
+    _userId?: string,
   ) {
     if (!batchItems || batchItems.length === 0) {
       throw new BadRequestException('No products to import');
@@ -318,7 +366,10 @@ export class ProductsService {
       productData.hasVariants === true || productData.hasVariants === 'true';
     const unit = productData.unit;
     const sku = productData.productSku ?? productData.sku;
-    const barcode = productData.productBarcode ?? productData.barcode ?? null;
+    let barcode = productData.productBarcode ?? productData.barcode ?? null;
+    if (!barcode || (typeof barcode === 'string' && !barcode.trim())) {
+      barcode = await this.barcodesService.generateUniqueBarcode();
+    }
     const costPrice = Number(
       productData.productCostPrice ?? productData.costPrice ?? 0,
     );
@@ -450,7 +501,10 @@ export class ProductsService {
       const vCode = v.variantCode ?? v.code;
       const vName = v.variantName ?? v.name;
       const vSku = v.variantSku ?? v.sku;
-      const vBarcode = v.variantBarcode ?? v.barcode ?? null;
+      let vBarcode = v.variantBarcode ?? v.barcode ?? null;
+      if (!vBarcode || (typeof vBarcode === 'string' && !vBarcode.trim())) {
+        vBarcode = await this.barcodesService.generateUniqueBarcode();
+      }
       const vAttributes = v.variantAttributes ?? v.attributes ?? null;
       const vCostPrice =
         v.variantCostPrice !== undefined &&

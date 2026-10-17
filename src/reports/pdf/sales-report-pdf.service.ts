@@ -3,13 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
 import * as path from 'path';
 import PDFDocument from 'pdfkit';
-import {
-  AdjustmentReasonGroup,
-  LowStockWarning,
-  ProductSalesSummary,
-  SalesReport,
-  StockInSummaryItem,
-} from '../interfaces/report.interface';
+import { SalesReport } from '../interfaces/report.interface';
 
 // Color Palette - Modern Corporate / Enterprise Theme
 const COLORS = {
@@ -79,7 +73,7 @@ export class SalesReportPdfService {
           `Failed to initialize PDF generation: ${error.message}`,
           error.stack,
         );
-        reject(error);
+        reject(error instanceof Error ? error : new Error(String(error)));
       }
     });
   }
@@ -144,7 +138,7 @@ export class SalesReportPdfService {
     );
 
     // 7. Inventory Health & Low Stock
-    currentY = this.renderInventoryHealth(
+    this.renderInventoryHealth(
       doc,
       report,
       margin,
@@ -1696,8 +1690,8 @@ export class SalesReportPdfService {
     doc: InstanceType<typeof PDFDocument>,
     currentY: number,
     neededSpace: number,
-    margin: number,
-    contentWidth: number,
+    _margin: number,
+    _contentWidth: number,
   ): number {
     if (currentY + neededSpace > 780) {
       doc.addPage();

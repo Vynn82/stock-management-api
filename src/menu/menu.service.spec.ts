@@ -12,7 +12,12 @@ describe('MenuService', () => {
         MenuService,
         {
           provide: getRepositoryToken(Menu),
-          useValue: { find: jest.fn(), findOne: jest.fn(), create: jest.fn(), save: jest.fn() },
+          useValue: {
+            find: jest.fn(),
+            findOne: jest.fn(),
+            create: jest.fn(),
+            save: jest.fn(),
+          },
         },
       ],
     }).compile();

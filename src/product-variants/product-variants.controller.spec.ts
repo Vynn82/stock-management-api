@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProductVariantsController } from './product-variants.controller';
 import { ProductVariantsService } from './product-variants.service';
+import { BarcodesService } from '../barcodes/barcodes.service';
 
 describe('ProductVariantsController', () => {
   let controller: ProductVariantsController;
@@ -17,6 +18,15 @@ describe('ProductVariantsController', () => {
             findOne: jest.fn(),
             update: jest.fn(),
             remove: jest.fn(),
+          },
+        },
+        {
+          provide: BarcodesService,
+          useValue: {
+            lookupByBarcode: jest.fn(),
+            streamVariantBarcode: jest.fn(),
+            streamVariantQr: jest.fn(),
+            streamVariantLabel: jest.fn(),
           },
         },
       ],

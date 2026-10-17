@@ -3,6 +3,7 @@ import { ProductsController } from './products.controller';
 import { ProductsService } from './products.service';
 
 import { ProductsExcelService } from './products-excel.service';
+import { BarcodesService } from '../barcodes/barcodes.service';
 
 describe('ProductsController', () => {
   let controller: ProductsController;
@@ -26,6 +27,15 @@ describe('ProductsController', () => {
           useValue: {
             exportProducts: jest.fn(),
             importProducts: jest.fn(),
+          },
+        },
+        {
+          provide: BarcodesService,
+          useValue: {
+            lookupByBarcode: jest.fn(),
+            streamProductBarcode: jest.fn(),
+            streamProductQr: jest.fn(),
+            streamProductLabel: jest.fn(),
           },
         },
       ],

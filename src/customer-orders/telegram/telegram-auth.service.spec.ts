@@ -21,15 +21,6 @@ import { CustomerTelegramAccount } from '../entities/customer-telegram-account.e
 import { CustomerStatus } from '../enums/customer-status.enum';
 import { CustomerJwtGuard } from '../guards/customer-jwt.guard';
 import { CustomerOrdersService } from '../customer-orders.service';
-import { CustomerOrder } from '../entities/customer-order.entity';
-import { CustomerOrderItem } from '../entities/customer-order-item.entity';
-import { CustomerOrderMessage } from '../entities/customer-order-message.entity';
-import { CustomerOrderPayment } from '../entities/customer-order-payment.entity';
-import { Product } from '../../products/entities/product.entity';
-import { ProductVariant } from '../../product-variants/entities/product-variant.entity';
-import { Stock } from '../../stock/entities/stock.entity';
-import { Warehouse } from '../../warehouses/entities/warehouse.entity';
-import { MailsService } from '../../mails/mails.service';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
@@ -156,7 +147,8 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
       username: 'john_doe',
     });
 
-    const result = await authService.authenticateTelegramCustomer(initData);
+    const result: any =
+      await authService.authenticateTelegramCustomer(initData);
 
     expect(result.status).toBe('REGISTRATION_REQUIRED');
     expect(result.telegramUser.id).toBe(1001);
@@ -169,13 +161,13 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
   it('Case 2: New user registers successfully -> status ACTIVE with access token', async () => {
     const initData = createValidInitData({ id: 1002, first_name: 'Alice' });
 
-    mockManager.findOne.mockImplementation((entity: any) => {
+    mockManager.findOne.mockImplementation((_entity: any) => {
       // No existing telegram account, phone, or company
       return Promise.resolve(null);
     });
     mockManager.find.mockResolvedValue([]);
 
-    const result = await authService.registerCustomer({
+    const result: any = await authService.registerCustomer({
       initData,
       companyName: 'Acme Retail',
       contactName: 'Alice Smith',
@@ -222,7 +214,7 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
     // When checking existing account inside transaction
     mockManager.findOne.mockResolvedValueOnce(existingAccount);
 
-    const result = await authService.registerCustomer({
+    const result: any = await authService.registerCustomer({
       initData,
       companyName: 'Bob Store New Name',
       contactName: 'Bob New',
@@ -256,7 +248,7 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
 
     mockManager.findOne.mockResolvedValueOnce(existingAccount);
 
-    const result = await authService.registerCustomer({
+    const result: any = await authService.registerCustomer({
       initData,
       companyName: 'Bob Store',
       contactName: 'Bob',
@@ -346,7 +338,8 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
       username: 'gold_partner',
     });
 
-    const result = await authService.authenticateTelegramCustomer(initData);
+    const result: any =
+      await authService.authenticateTelegramCustomer(initData);
 
     expect(result.status).toBe(CustomerStatus.ACTIVE);
     expect(result.accessToken).toBe('mock-customer-jwt-token');
@@ -403,7 +396,8 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
     accountRepo.findOne.mockResolvedValue(rejectedAccount);
     const initData = createValidInitData({ id: 1007, first_name: 'Dave' });
 
-    const result = await authService.authenticateTelegramCustomer(initData);
+    const result: any =
+      await authService.authenticateTelegramCustomer(initData);
 
     expect(result.status).toBe(CustomerStatus.REJECTED);
     expect(result.rejectionReason).toBe(
@@ -436,7 +430,7 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
 
     mockManager.findOne.mockResolvedValueOnce(existingAccount);
 
-    const result = await authService.registerCustomer({
+    const result: any = await authService.registerCustomer({
       initData,
       companyName: 'Eve Updated Enterprise',
       contactName: 'Eve Smith',
@@ -581,7 +575,7 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
 
     const loggerWarnSpy = jest.spyOn((authService as any).logger, 'warn');
 
-    const result = await authService.registerCustomer({
+    const result: any = await authService.registerCustomer({
       initData,
       companyName: 'Different Company',
       contactName: 'George',
@@ -614,7 +608,7 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
 
     const loggerWarnSpy = jest.spyOn((authService as any).logger, 'warn');
 
-    const result = await authService.registerCustomer({
+    const result: any = await authService.registerCustomer({
       initData,
       companyName: 'Mega Star Trading Ltd', // Normalized name matches
       contactName: 'Helen',
@@ -666,6 +660,7 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
       companyName: 'To Reject Co',
       status: CustomerStatus.PENDING,
       isActive: true,
+      rejectionReason: null as string | null,
       telegramAccounts: [{ telegramChatId: 'chat-16', telegramUserId: '1016' }],
     };
 

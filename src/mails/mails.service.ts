@@ -2,8 +2,6 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
-  Patch,
-  Param,
 } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
