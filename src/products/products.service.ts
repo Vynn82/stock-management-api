@@ -571,16 +571,11 @@ export class ProductsService {
     const hasVariants =
       productData.hasVariants === true || productData.hasVariants === 'true';
     const unit = productData.unit;
-<<<<<<< HEAD
     let sku: string | undefined = productData.productSku ?? productData.sku;
-    const barcode = productData.productBarcode ?? productData.barcode ?? null;
-=======
-    const sku = productData.productSku ?? productData.sku;
     let barcode = productData.productBarcode ?? productData.barcode ?? null;
     if (!barcode || (typeof barcode === 'string' && !barcode.trim())) {
       barcode = await this.barcodesService.generateUniqueBarcode();
     }
->>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
     const costPrice = Number(
       productData.productCostPrice ?? productData.costPrice ?? 0,
     );
@@ -727,16 +722,11 @@ export class ProductsService {
       const vCode =
         v.variantCode ?? v.code ?? `${code}-V${savedVariants.length + 1}`;
       const vName = v.variantName ?? v.name;
-<<<<<<< HEAD
       const vSku = v.variantSku ?? v.sku ?? `${sku}-V${savedVariants.length + 1}`;
-      const vBarcode = v.variantBarcode ?? v.barcode ?? null;
-=======
-      const vSku = v.variantSku ?? v.sku;
       let vBarcode = v.variantBarcode ?? v.barcode ?? null;
       if (!vBarcode || (typeof vBarcode === 'string' && !vBarcode.trim())) {
         vBarcode = await this.barcodesService.generateUniqueBarcode();
       }
->>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
       const vAttributes = v.variantAttributes ?? v.attributes ?? null;
       const vCostPrice =
         v.variantCostPrice !== undefined &&

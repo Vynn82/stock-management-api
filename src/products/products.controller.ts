@@ -55,11 +55,7 @@ export class ProductsController {
     return this.productsService.createFromMultipart(body, files, req.user.sub);
   }
 
-<<<<<<< HEAD
-  @RequirePermission('PRODUCT_VIEW')
-=======
   @Public()
->>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
   @Get()
   findAll(@Query() query: ProductFilterDto) {
     return this.productsService.findAll(query);
@@ -145,7 +141,6 @@ export class ProductsController {
     return this.productsService.createManyDirect(batchItems, req.user.sub);
   }
 
-<<<<<<< HEAD
   /**
    * Scanner lookup: exact match on product/variant code, SKU or barcode.
    * Must stay above `:id` so "by-code" is not treated as an id.
@@ -156,10 +151,7 @@ export class ProductsController {
     return this.productsService.findByCode(code);
   }
 
-  @RequirePermission('PRODUCT_VIEW')
-=======
   @Public()
->>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.productsService.findOne(id);

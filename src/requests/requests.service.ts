@@ -2108,13 +2108,8 @@ export class RequestsService {
       hasVariants: item.hasVariants,
       unit: item.unit,
 
-<<<<<<< HEAD
       sku: productSku,
-      barcode: item.productBarcode,
-=======
-      sku: item.productSku,
       barcode,
->>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
 
       costPrice: item.productCostPrice ?? 0,
       sellingPrice: item.productSellingPrice ?? 0,
@@ -2198,13 +2193,8 @@ export class RequestsService {
         code: item.variantCode!,
         name: item.variantName ?? '',
 
-<<<<<<< HEAD
         sku: variantSku,
-        barcode: item.variantBarcode,
-=======
-        sku: item.variantSku!,
         barcode: vBarcode,
->>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
 
         attributes: item.variantAttributes,
         image: item.variantImage,

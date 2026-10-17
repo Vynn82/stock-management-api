@@ -18,12 +18,8 @@ import { AnyFilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { RequestsService } from './requests.service';
 import { RequestType } from './enum/request-type.enum';
 import { Public } from '../auth/decorators/public.decorator';
-<<<<<<< HEAD
 import { imageUploadOptions } from '../common/cloudinary/cloudinary-storage';
 import { RequirePermission } from '../auth/decorators/permission.decorator';
-=======
-import { productStorage } from '../common/cloudinary/cloudinary-storage';
->>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
 import { CommitRequestDto } from './dto/commit-request.dto';
 import { PaginationDto } from '../common/pagination';
 
@@ -82,17 +78,10 @@ export class RequestsController {
     return res.send(file);
   }
 
-<<<<<<< HEAD
-  // =====================================================
-  // MANUAL CREATE
-  // =====================================================
-
-  @RequirePermission('REQUEST_CREATE')
-=======
   /**
    * Create a new request manually with multipart form-data.
    */
->>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
+  @RequirePermission('REQUEST_CREATE')
   @Post()
   @UseInterceptors(
     AnyFilesInterceptor(imageUploadOptions),
@@ -105,17 +94,10 @@ export class RequestsController {
     return this.requestsService.createFromMultipart(body, files, req.user.sub);
   }
 
-<<<<<<< HEAD
-  // =====================================================
-  // EXCEL IMPORT
-  // =====================================================
-
-  @RequirePermission('REQUEST_CREATE')
-=======
   /**
    * Bulk import a request from an Excel file.
    */
->>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
+  @RequirePermission('REQUEST_CREATE')
   @Post('import')
   @UseInterceptors(FileInterceptor('file'))
   importExcel(
@@ -132,13 +114,10 @@ export class RequestsController {
     );
   }
 
-<<<<<<< HEAD
-  @RequirePermission('REQUEST_VIEW')
-=======
   /**
    * Commit, approve, or reject a request.
    */
->>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
+  @RequirePermission('REQUEST_VIEW')
   @Post(':id/commit')
   commit(
     @Param('id') requestId: string,
