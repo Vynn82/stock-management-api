@@ -2,19 +2,17 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: stock-management-db
-    restart: always
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: ${DB_DATABASE:-stock-management-db}
-      POSTGRES_USER: ${DB_USERNAME:-Vynn82}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-123}
+      POSTGRES_DB: ${DB_DATABASE:?Set DB_DATABASE}
+      POSTGRES_USER: ${DB_USERNAME:?Set DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test:
-        [
-          'CMD-SHELL',
-          'pg_isready -U ${DB_USERNAME:-Vynn82} -d ${DB_DATABASE:-stock-management-db}',
-        ]
+        - CMD-SHELL
+        - pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"
       interval: 10s
       timeout: 5s
       retries: 5
@@ -23,9 +21,7 @@ services:
       - stock_network
 
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: 870853685390.dkr.ecr.ap-southeast-1.amazonaws.com/stock-management-api:${IMAGE_TAG:-latest}
     container_name: stock-management-api
     restart: always
     depends_on:

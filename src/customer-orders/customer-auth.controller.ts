@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { TelegramAuthService } from './telegram/telegram-auth.service';
 import { TelegramAuthDto } from './dto/telegram-auth.dto';
 import { CustomerRegisterDto } from './dto/customer-registration.dto';
@@ -18,5 +18,20 @@ export class CustomerAuthController {
   @Post('register')
   async registerCustomer(@Body() dto: CustomerRegisterDto) {
     return this.telegramAuthService.registerCustomer(dto);
+  }
+
+  @Public()
+  @Get('location/reverse-geocode')
+  async reverseGeocode(
+    @Query('lat') lat: number,
+    @Query('lng') lng: number,
+  ) {
+    return this.telegramAuthService.reverseGeocode(Number(lat), Number(lng));
+  }
+
+  @Public()
+  @Get('location/search')
+  async searchLocation(@Query('query') query: string) {
+    return this.telegramAuthService.searchLocation(query);
   }
 }

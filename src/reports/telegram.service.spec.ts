@@ -50,17 +50,13 @@ describe('TelegramService', () => {
           useValue: {
             get: jest.fn((key: string) => {
               if (key === 'TELEGRAM_BOT_TOKEN')
-                return (
-                  (process.env.TELEGRAM_BOT_TOKEN || '')
-                    .replace(/^["']|["']$/g, '')
-                    .trim() || 'test_bot_token'
-                );
+                return (process.env.TELEGRAM_BOT_TOKEN || 'mock-bot-token')
+                  .replace(/^["']|["']$/g, '')
+                  .trim();
               if (key === 'TELEGRAM_CHAT_ID')
-                return (
-                  (process.env.TELEGRAM_CHAT_ID || '')
-                    .replace(/^["']|["']$/g, '')
-                    .trim() || '-123456789'
-                );
+                return (process.env.TELEGRAM_CHAT_ID || 'mock-chat-id')
+                  .replace(/^["']|["']$/g, '')
+                  .trim();
               return null;
             }),
           },
@@ -119,6 +115,7 @@ describe('TelegramService', () => {
   });
 
   it('should still succeed with summary delivery even if PDF generation throws an error', async () => {
+    jest.spyOn((service as any).logger, 'error').mockImplementation(() => {});
     jest
       .spyOn(pdfService, 'generateReportPdf')
       .mockRejectedValueOnce(new Error('PDF generation engine failed'));
@@ -137,7 +134,8 @@ describe('TelegramService', () => {
   });
 
   it('should still succeed with summary delivery if sendDocument fails', async () => {
-    jest.spyOn(global, 'fetch').mockImplementation((url: any) => {
+    jest.spyOn((service as any).logger, 'error').mockImplementation(() => {});
+    jest.spyOn(global, 'fetch').mockImplementation(async (url: any) => {
       const urlStr = url.toString();
       if (urlStr.includes('/sendMessage')) {
         return Promise.resolve({

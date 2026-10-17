@@ -137,14 +137,18 @@ export class TelegramBotService {
     orderNo: string,
     totalAmount: number,
     itemCount: number,
+    deliveryAddress?: string | null,
   ): Promise<void> {
     const miniAppUrl = this.getMiniAppUrl();
+    const addressLine = deliveryAddress
+      ? `\n📍 Delivery: <b>${deliveryAddress}</b>`
+      : '';
     const text =
       `📋 <b>New Order Created by Sales Staff</b>\n\n` +
       `Order: <b>#${orderNo}</b>\n` +
       `Items: <b>${itemCount} item(s)</b>\n` +
       `Total: <b>$${Number(totalAmount).toFixed(2)}</b>\n` +
-      `Status: <b>Confirmed</b>\n\n` +
+      `Status: <b>Confirmed</b>${addressLine}\n\n` +
       `Your order has been placed by our sales representative and confirmed for delivery.\n` +
       `<i>Payment is cash on delivery.</i>`;
 

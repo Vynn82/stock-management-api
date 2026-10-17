@@ -1704,7 +1704,7 @@ The system strictly decouples the legal/commercial Customer business profile fro
     }
     ```
 
-#### 19.3.2 Register Customer Account
+#### 19.3.2 Register Customer Account (v2 Location Support)
 - **Endpoint**: `POST /customer-auth/register` *(also supports `/customer-orders/auth/register` for backwards compatibility)*
 - **Access**: Public
 - **Request Body**:
@@ -1714,9 +1714,15 @@ The system strictly decouples the legal/commercial Customer business profile fro
     "companyName": "Phnom Penh Retailers Ltd",
     "contactName": "Sokha Chan",
     "phone": "012-345-678",
-    "address": "#123, St 456, Boeung Keng Kang 1, Phnom Penh"
+    "address": "#123, St 456, Boeung Keng Kang 1, Phnom Penh",
+    "latitude": 11.5564000,
+    "longitude": 104.9282000,
+    "province": "Phnom Penh",
+    "district": "Boeung Keng Kang",
+    "commune": "Boeung Keng Kang Ti Muoy"
   }
   ```
+  *(Note: `address` is mandatory; `latitude` [-90 to 90], `longitude` [-180 to 180], `province`, `district`, and `commune` are optional and captured via GPS or interactive map selection).*
 - **Response (`201 Created` / `200 OK`)**:
   ```json
   {
@@ -1729,6 +1735,11 @@ The system strictly decouples the legal/commercial Customer business profile fro
       "contactName": "Sokha Chan",
       "phone": "012345678",
       "address": "#123, St 456, Boeung Keng Kang 1, Phnom Penh",
+      "latitude": 11.5564000,
+      "longitude": 104.9282000,
+      "province": "Phnom Penh",
+      "district": "Boeung Keng Kang",
+      "commune": "Boeung Keng Kang Ti Muoy",
       "status": "ACTIVE",
       "telegramUserId": "1005",
       "telegramUsername": "sokhachan",
@@ -1738,6 +1749,43 @@ The system strictly decouples the legal/commercial Customer business profile fro
   }
   ```
   *(Note: Registration creates the account directly as `ACTIVE`, issuing the customer JWT token so the partner can browse and order immediately without waiting for pre-approval).*
+
+#### 19.3.3 Reverse Geocode Coordinates
+- **Endpoint**: `GET /customer-auth/location/reverse-geocode?lat=...&lng=...`
+- **Access**: Public
+- **Query Parameters**:
+  - `lat`: Numeric latitude (-90 to 90)
+  - `lng`: Numeric longitude (-180 to 180)
+- **Response (`200 OK`)**:
+  ```json
+  {
+    "formattedAddress": "#123 St 456, Boeung Keng Kang 1, Phnom Penh, Cambodia",
+    "latitude": 11.5564,
+    "longitude": 104.9282,
+    "province": "Phnom Penh",
+    "district": "Boeung Keng Kang",
+    "commune": "Boeung Keng Kang Ti Muoy"
+  }
+  ```
+
+#### 19.3.4 Location / Place Search (Autocomplete)
+- **Endpoint**: `GET /customer-auth/location/search?query=...`
+- **Access**: Public
+- **Query Parameters**:
+  - `query`: Search string (e.g., place name, street, or landmark)
+- **Response (`200 OK`)**:
+  ```json
+  [
+    {
+      "displayName": "Boeung Keng Kang Market, St 380, Phnom Penh, Cambodia",
+      "latitude": 11.551234,
+      "longitude": 104.925678,
+      "province": "Phnom Penh",
+      "district": "Boeung Keng Kang",
+      "commune": "Boeung Keng Kang Ti Muoy"
+    }
+  ]
+  ```
 
 ---
 
@@ -1874,12 +1922,21 @@ Customer registration **does NOT require staff approval**.
   - Sets `source = 'STAFF'`, `createdByStaffId = req.user.sub`.
   - Sets `status = 'CONFIRMED'` immediately (no pending review needed since staff initiated it).
   - Automatically and safely locks and decrements warehouse stock immediately.
-  - Automatically notifies the customer on Telegram that an order was created and confirmed by staff.
+  - Automatically notifies the customer on Telegram that an order was created and confirmed by staff with delivery location.
+  - **Reverse Geocoding & Location Support**:
+    - Staff can provide `latitude` and `longitude` directly (e.g. from GPS pin or map selection).
+    - If coordinates are provided without `deliveryAddress`, backend calls OpenStreetMap Nominatim reverse geocoding to automatically resolve `deliveryAddress`, `province`, `district`, and `commune`.
+    - If coordinates are omitted, the order defaults automatically to the registered customer's address and location coordinates.
 - **Request Body**:
   ```json
   {
     "customerId": "2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
     "deliveryAddress": "#123 St 456, Phnom Penh",
+    "latitude": 11.5564,
+    "longitude": 104.9282,
+    "province": "Phnom Penh",
+    "district": "Boeung Keng Kang",
+    "commune": "Boeung Keng Kang Ti Muoy",
     "remark": "Phone order via Telegram chat",
     "warehouseCode": "WH-MAIN",
     "items": [
@@ -1902,6 +1959,12 @@ Customer registration **does NOT require staff approval**.
     "createdByStaffId": "staff-user-uuid",
     "deliveryStatus": "PENDING",
     "paymentStatus": "UNPAID",
+    "deliveryAddress": "#123 St 456, Boeung Keng Kang 1, Phnom Penh, Cambodia",
+    "latitude": 11.5564,
+    "longitude": 104.9282,
+    "province": "Phnom Penh",
+    "district": "Boeung Keng Kang",
+    "commune": "Boeung Keng Kang Ti Muoy",
     "totalAmount": 1250.00,
     "items": [
       {
@@ -1915,7 +1978,14 @@ Customer registration **does NOT require staff approval**.
   }
   ```
 
-#### 19.5.6 Staff Order Review: Accept Order
+#### 19.5.6 Staff Reverse Geocoding & Place Search Endpoints
+- **Endpoints**:
+  - `GET /customer-orders/location/reverse-geocode?lat=11.5564&lng=104.9282`
+  - `GET /customer-orders/location/search?query=central+market`
+- **Access**: Authenticated Staff (Requires Bearer token)
+- **Description**: Allows staff UI location pickers to search places and resolve GPS coordinates to structured addresses when creating customer orders.
+
+#### 19.5.7 Staff Order Review: Accept Order
 - **Endpoint**: `POST /customer-orders/:id/accept`
 - **Access**: Authenticated Staff (Requires Bearer token)
 - **Request Body** *(Optional)*:

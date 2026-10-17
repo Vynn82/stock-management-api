@@ -132,6 +132,19 @@ export class CustomerOrdersController {
   // 3. STAFF / ADMIN ORDER MANAGEMENT ROUTES
   // ========================================================
 
+  @Get('location/reverse-geocode')
+  async reverseGeocode(
+    @Query('lat') lat: number,
+    @Query('lng') lng: number,
+  ) {
+    return this.telegramAuthService.reverseGeocode(Number(lat), Number(lng));
+  }
+
+  @Get('location/search')
+  async searchLocation(@Query('query') query: string) {
+    return this.telegramAuthService.searchLocation(query);
+  }
+
   @Post('staff')
   async createOrderForStaff(
     @Req() req: authenticatedUserInterface.AuthenticatedRequest,

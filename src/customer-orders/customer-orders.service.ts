@@ -45,6 +45,7 @@ import {
   createPaginatedResult,
   getPaginationOptions,
 } from '../common/pagination';
+import { TelegramAuthService } from './telegram/telegram-auth.service';
 
 @Injectable()
 export class CustomerOrdersService {
@@ -71,6 +72,7 @@ export class CustomerOrdersService {
     @InjectRepository(Warehouse)
     private readonly warehouseRepo: Repository<Warehouse>,
     private readonly telegramBotService: TelegramBotService,
+    private readonly telegramAuthService: TelegramAuthService,
     private readonly mailsService: MailsService,
   ) {}
 
@@ -191,6 +193,17 @@ export class CustomerOrdersService {
         paymentStatus: PaymentStatus.UNPAID,
         totalAmount: Number(totalAmount.toFixed(2)),
         deliveryAddress: dto.deliveryAddress || customer.address || null,
+        latitude:
+          customer.latitude !== null && customer.latitude !== undefined
+            ? Number(customer.latitude)
+            : null,
+        longitude:
+          customer.longitude !== null && customer.longitude !== undefined
+            ? Number(customer.longitude)
+            : null,
+        province: customer.province || null,
+        district: customer.district || null,
+        commune: customer.commune || null,
         remark: dto.remark || null,
       });
 
@@ -407,6 +420,72 @@ export class CustomerOrdersService {
         telegramUserId ||
         null;
 
+      // 4. Resolve delivery location & reverse geocode
+      let deliveryAddress = dto.deliveryAddress?.trim() || null;
+      let latitude =
+        dto.latitude !== undefined && dto.latitude !== null
+          ? Number(dto.latitude)
+          : null;
+      let longitude =
+        dto.longitude !== undefined && dto.longitude !== null
+          ? Number(dto.longitude)
+          : null;
+      let province = dto.province?.trim() || null;
+      let district = dto.district?.trim() || null;
+      let commune = dto.commune?.trim() || null;
+
+      // If coordinates are provided by staff, reverse-geocode to complete address and administrative hierarchy
+      if (
+        latitude !== null &&
+        longitude !== null &&
+        !isNaN(latitude) &&
+        !isNaN(longitude)
+      ) {
+        try {
+          const geo = await this.telegramAuthService.reverseGeocode(
+            latitude,
+            longitude,
+          );
+          if (geo) {
+            if (!deliveryAddress) {
+              deliveryAddress = geo.formattedAddress;
+            }
+            if (!province) province = geo.province || null;
+            if (!district) district = geo.district || null;
+            if (!commune) commune = geo.commune || null;
+          }
+        } catch (err: any) {
+          this.logger.warn(
+            `Reverse geocoding failed for staff order coordinates [${latitude}, ${longitude}]: ${err.message}`,
+          );
+          if (!deliveryAddress) {
+            deliveryAddress = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+          }
+        }
+      } else {
+        // Fall back to customer's saved location if not overridden in order
+        if (!deliveryAddress && customer.address) {
+          deliveryAddress = customer.address;
+        }
+        if (
+          latitude === null &&
+          customer.latitude !== null &&
+          customer.latitude !== undefined
+        ) {
+          latitude = Number(customer.latitude);
+        }
+        if (
+          longitude === null &&
+          customer.longitude !== null &&
+          customer.longitude !== undefined
+        ) {
+          longitude = Number(customer.longitude);
+        }
+        if (!province && customer.province) province = customer.province;
+        if (!district && customer.district) district = customer.district;
+        if (!commune && customer.commune) commune = customer.commune;
+      }
+
       const newOrder = manager.create(CustomerOrder, {
         orderNo,
         customerId: customer.id,
@@ -418,8 +497,12 @@ export class CustomerOrdersService {
         deliveryStatus: DeliveryStatus.PENDING,
         paymentStatus: PaymentStatus.UNPAID,
         totalAmount: Number(totalAmount.toFixed(2)),
-        deliveryAddress:
-          dto.deliveryAddress?.trim() || customer.address || null,
+        deliveryAddress,
+        latitude,
+        longitude,
+        province,
+        district,
+        commune,
         remark: dto.remark?.trim() || null,
       });
 
@@ -449,6 +532,7 @@ export class CustomerOrdersService {
             orderNo,
             totalAmount,
             orderItems.length,
+            deliveryAddress,
           )
           .catch((err) =>
             this.logger.error(

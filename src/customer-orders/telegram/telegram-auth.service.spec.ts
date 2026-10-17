@@ -24,9 +24,11 @@ import { CustomerOrdersService } from '../customer-orders.service';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
-const TEST_BOT_TOKEN =
-  (process.env.TELEGRAM_BOT_TOKEN || '').replace(/^["']|["']$/g, '').trim() ||
-  'test_telegram_bot_token_123456';
+const TEST_BOT_TOKEN = (
+  process.env.TELEGRAM_BOT_TOKEN || 'mock-bot-token-for-unit-tests-123456789'
+)
+  .replace(/^["']|["']$/g, '')
+  .trim();
 
 function createValidInitData(
   user: any,
@@ -171,12 +173,22 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
       contactName: 'Alice Smith',
       phone: '012 345 678',
       address: 'Phnom Penh, Cambodia',
+      latitude: 11.5564,
+      longitude: 104.9282,
+      province: 'Phnom Penh',
+      district: 'Chamkar Mon',
+      commune: 'Tonle Bassac',
     });
 
     expect(result.status).toBe(CustomerStatus.ACTIVE);
     expect(result.accessToken).toBe('mock-customer-jwt-token');
     expect(result.customer.status).toBe(CustomerStatus.ACTIVE);
     expect(result.customer.companyName).toBe('Acme Retail');
+    expect(result.customer.latitude).toBe(11.5564);
+    expect(result.customer.longitude).toBe(104.9282);
+    expect(result.customer.province).toBe('Phnom Penh');
+    expect(result.customer.district).toBe('Chamkar Mon');
+    expect(result.customer.commune).toBe('Tonle Bassac');
   });
 
   // -------------------------------------------------------------
@@ -747,6 +759,28 @@ describe('Telegram Customer Registration & Authentication (17 Test Cases)', () =
     expect(result[0].id).toBe('cust-search-1');
     expect(result[0].canOrder).toBe(true);
     expect(result[0].telegramAccounts[0].telegramUsername).toBe('john123');
+  });
+
+  // -------------------------------------------------------------
+  // Test Case 19: reverseGeocode validates coordinates
+  // -------------------------------------------------------------
+  it('Case 19: reverseGeocode validates coordinates and throws on out-of-range latitude/longitude', async () => {
+    await expect(authService.reverseGeocode(95, 104)).rejects.toThrow(
+      'Invalid coordinates',
+    );
+    await expect(authService.reverseGeocode(11.5, 200)).rejects.toThrow(
+      'Invalid coordinates',
+    );
+  });
+
+  // -------------------------------------------------------------
+  // Test Case 20: searchLocation returns empty array for short query
+  // -------------------------------------------------------------
+  it('Case 20: searchLocation returns empty array for blank or short queries', async () => {
+    const emptyResult = await authService.searchLocation('');
+    expect(emptyResult).toEqual([]);
+    const shortResult = await authService.searchLocation('a');
+    expect(shortResult).toEqual([]);
   });
 
   // Helper unit tests

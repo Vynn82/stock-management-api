@@ -33,6 +33,8 @@ ENV PORT=3000
 
 RUN apk add --no-cache curl
 
+# USER node
+RUN mkdir -p /app/logs && chown -R node:node /app
 USER node
 
 COPY --chown=node:node package.json ./

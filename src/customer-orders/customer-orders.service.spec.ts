@@ -14,6 +14,7 @@ import { ProductVariant } from '../product-variants/entities/product-variant.ent
 import { Stock } from '../stock/entities/stock.entity';
 import { Warehouse } from '../warehouses/entities/warehouse.entity';
 import { TelegramBotService } from './telegram/telegram-bot.service';
+import { TelegramAuthService } from './telegram/telegram-auth.service';
 import { MailsService } from '../mails/mails.service';
 import { CustomerOrderStatus } from './enums/customer-order-status.enum';
 import { CustomerStatus } from './enums/customer-status.enum';
@@ -34,6 +35,7 @@ describe('CustomerOrdersService Business Invariant Tests', () => {
   let stockRepo: any;
   let warehouseRepo: any;
   let telegramBotService: any;
+  let telegramAuthService: any;
   let mailsService: any;
 
   beforeEach(async () => {
@@ -86,6 +88,20 @@ describe('CustomerOrdersService Business Invariant Tests', () => {
       notifyStaffOrderCreated: jest.fn().mockResolvedValue(undefined),
     };
 
+    telegramAuthService = {
+      reverseGeocode: jest.fn().mockImplementation((lat, lng) =>
+        Promise.resolve({
+          formattedAddress: `Mock Address St 101 (${lat}, ${lng})`,
+          latitude: lat,
+          longitude: lng,
+          province: 'Phnom Penh',
+          district: 'Chamkarmon',
+          commune: 'Tonle Bassac',
+        }),
+      ),
+      searchLocation: jest.fn().mockResolvedValue([]),
+    };
+
     mailsService = {
       createMail: jest.fn().mockResolvedValue({}),
     };
@@ -110,6 +126,7 @@ describe('CustomerOrdersService Business Invariant Tests', () => {
         { provide: getRepositoryToken(Stock), useValue: stockRepo },
         { provide: getRepositoryToken(Warehouse), useValue: warehouseRepo },
         { provide: TelegramBotService, useValue: telegramBotService },
+        { provide: TelegramAuthService, useValue: telegramAuthService },
         { provide: MailsService, useValue: mailsService },
       ],
     }).compile();
@@ -542,11 +559,80 @@ describe('CustomerOrdersService Business Invariant Tests', () => {
         expect.stringMatching(/^ORD-/),
         75.0,
         1,
+        expect.anything(),
       );
 
       expect(result).not.toBeNull();
       expect(result!.source).toBe(OrderSource.STAFF);
       expect(result!.status).toBe(CustomerOrderStatus.CONFIRMED);
+    });
+
+    it('should reverse-geocode coordinates and record location details when staff provides coordinates', async () => {
+      const mockCustomer = {
+        id: 'cust-geo',
+        status: CustomerStatus.ACTIVE,
+        isActive: true,
+        address: 'Old customer address',
+        telegramUserId: 'tg-geo',
+        telegramAccounts: [{ telegramUserId: 'tg-geo', telegramChatId: 'chat-geo' }],
+      };
+
+      const mockWarehouse = { id: 'wh-1', code: 'WH-MAIN', name: 'Main WH', isActive: true };
+      const mockProduct = {
+        id: 'prod-geo',
+        name: 'Geo Product',
+        sellingPrice: 50.0,
+        isActive: true,
+      };
+      const mockStock = { id: 'stk-geo', quantity: 10 };
+
+      customerRepo.findOne.mockResolvedValue(mockCustomer);
+
+      const mockStockQueryBuilder = {
+        setLock: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(mockStock),
+      };
+      dataSource.manager.createQueryBuilder.mockReturnValue(mockStockQueryBuilder);
+
+      dataSource.manager.findOne.mockImplementation((entity: any) => {
+        if (entity === Warehouse) return Promise.resolve(mockWarehouse);
+        if (entity === Product) return Promise.resolve(mockProduct);
+        if (entity === CustomerOrder) {
+          return Promise.resolve({
+            id: 'ord-geo-1',
+            orderNo: 'ORD-20261004-8888',
+            deliveryAddress: 'Mock Address St 101 (11.5564, 104.9282)',
+            latitude: 11.5564,
+            longitude: 104.9282,
+            province: 'Phnom Penh',
+            district: 'Chamkarmon',
+            commune: 'Tonle Bassac',
+            status: CustomerOrderStatus.CONFIRMED,
+            source: OrderSource.STAFF,
+            createdByStaffId: 'staff-user-1',
+            totalAmount: 100.0,
+            items: [],
+          });
+        }
+        return Promise.resolve(null);
+      });
+
+      const result = await service.createOrderForStaff('staff-user-1', {
+        customerId: 'cust-geo',
+        latitude: 11.5564,
+        longitude: 104.9282,
+        items: [{ productId: 'prod-geo', quantity: 2 }],
+      });
+
+      expect(telegramAuthService.reverseGeocode).toHaveBeenCalledWith(11.5564, 104.9282);
+      expect(result.deliveryAddress).toBe('Mock Address St 101 (11.5564, 104.9282)');
+      expect(result.latitude).toBe(11.5564);
+      expect(result.longitude).toBe(104.9282);
+      expect(result.province).toBe('Phnom Penh');
+      expect(result.district).toBe('Chamkarmon');
+      expect(result.commune).toBe('Tonle Bassac');
     });
   });
 });
