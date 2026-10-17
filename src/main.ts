@@ -25,6 +25,7 @@ async function bootstrap() {
     origin: (origin, callback) => {
       // Allow requests with no origin (like mobile apps, curl, or telegram webhook)
       if (!origin) return callback(null, true);
+
       const allowedOrigins = [
         'http://localhost:8200',
         'http://127.0.0.1:8200',
@@ -33,10 +34,41 @@ async function bootstrap() {
         'http://localhost:3001',
         'http://127.0.0.1:3001',
       ];
+
+      // Allow configured Telegram Mini App URL origin
+      let miniAppOrigin: string | null = null;
+      if (process.env.TELEGRAM_MINI_APP_URL) {
+        try {
+          miniAppOrigin = new URL(process.env.TELEGRAM_MINI_APP_URL).origin;
+        } catch {
+          miniAppOrigin = process.env.TELEGRAM_MINI_APP_URL.replace(/\/+$/, '');
+        }
+      }
+
+      // Allow dynamically configured CORS origins from .env
+      const customOrigins = (process.env.CORS_ORIGINS || '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .map((item) => {
+          try {
+            return new URL(item).origin;
+          } catch {
+            return item.replace(/\/+$/, '');
+          }
+        });
+
       if (
         allowedOrigins.includes(origin) ||
+        (miniAppOrigin && origin === miniAppOrigin) ||
+        customOrigins.includes(origin) ||
         process.env.NODE_ENV !== 'production' ||
+        origin.endsWith('.onrender.com') ||
+        origin.endsWith('.vercel.app') ||
+        origin.endsWith('.netlify.app') ||
         origin.endsWith('.ngrok-free.app') ||
+        origin.endsWith('.ngrok.io') ||
+        origin.endsWith('.ngrok.app') ||
         origin.endsWith('.loca.lt')
       ) {
         return callback(null, true);
