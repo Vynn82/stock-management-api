@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -21,9 +22,9 @@ import { ProductsService } from './products.service';
 import { ProductsExcelService } from './products-excel.service';
 import { PaginationDto } from '../common/pagination';
 import { ProductFilterDto } from './dto/product-filter.dto';
-import { RequireRoles } from '../auth/decorators/roles.decorator';
+import { RequirePermission } from '../auth/decorators/permission.decorator';
 import { Public } from '../auth/decorators/public.decorator';
-import { productStorage } from '../common/cloudinary/cloudinary-storage';
+import { imageUploadOptions } from '../common/cloudinary/cloudinary-storage';
 
 @Controller('products')
 export class ProductsController {
@@ -36,11 +37,9 @@ export class ProductsController {
    * Direct product creation for ADMIN and SUPER_ADMIN (no approvers required).
    */
   @Post()
-  @RequireRoles('ADMIN', 'SUPER_ADMIN')
+  @RequirePermission('PRODUCT_CREATE')
   @UseInterceptors(
-    AnyFilesInterceptor({
-      storage: productStorage,
-    }),
+    AnyFilesInterceptor(imageUploadOptions),
   )
   async create(
     @Body() body: any,
@@ -93,6 +92,7 @@ export class ProductsController {
     );
   }
 
+  @RequirePermission('PRODUCT_VIEW')
   @Get()
   async findAll(@Query() query: ProductFilterDto) {
     return this.productsService.findAll(query);
@@ -121,6 +121,7 @@ export class ProductsController {
    * Export existing active products to an Excel file with dynamic filtering.
    * Supports filtering by date range (startDate/endDate), brand, category, and search.
    */
+  @RequirePermission('PRODUCT_VIEW')
   @Get('export')
   async exportExcel(@Query() query: ProductFilterDto, @Res() res: Response) {
     const products = await this.productsService.exportAll(query);
@@ -138,10 +139,36 @@ export class ProductsController {
   }
 
   /**
-   * Import products directly from Excel (Admin & Super Admin only).
+   * Import products directly from Excel (PRODUCT_IMPORT: Admin, Manager,
+   * Super Admin). Separate from PRODUCT_CREATE so that giving a role the
+   * import does not also switch its Add Product form from "send a request"
+   * to "save directly".
    */
+  @Post('import/preview')
+  @RequirePermission('PRODUCT_IMPORT')
+  @UseInterceptors(FileInterceptor('file'))
+  async previewImport(@UploadedFile() file: Express.Multer.File) {
+    // Never throws for problems in the file: they come back as a list so the
+    // review screen can show every one of them.
+    try {
+      const batchItems = this.productsExcelService.importExcel(file);
+      return await this.productsService.previewManyDirect(batchItems);
+    } catch (e) {
+      if (e instanceof BadRequestException) {
+        const body = e.getResponse() as any;
+        const message =
+          typeof body === 'string' ? body : String(body?.message ?? e.message);
+        const errors: string[] = Array.isArray(body?.errors)
+          ? body.errors.map(String)
+          : [message];
+        return { ok: false, message, errors };
+      }
+      throw e;
+    }
+  }
+
   @Post('import')
-  @RequireRoles('ADMIN', 'SUPER_ADMIN')
+  @RequirePermission('PRODUCT_IMPORT')
   @UseInterceptors(FileInterceptor('file'))
   async importExcel(
     @UploadedFile() file: Express.Multer.File,
@@ -151,21 +178,53 @@ export class ProductsController {
     return this.productsService.createManyDirect(batchItems, req.user.sub);
   }
 
+  /**
+   * Scanner lookup: exact match on product/variant code, SKU or barcode.
+   * Must stay above `:id` so "by-code" is not treated as an id.
+   */
+  @RequirePermission('PRODUCT_VIEW')
+  @Get('by-code/:code')
+  async findByCode(@Param('code') code: string) {
+    return this.productsService.findByCode(code);
+  }
+
+  @RequirePermission('PRODUCT_VIEW')
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.productsService.findOne(id);
   }
 
+  /**
+   * Change the photo of an existing product (multipart field "image").
+   * Own permission (PRODUCT_IMAGE: Admin, Manager) so Manager can fix photos
+   * without PRODUCT_UPDATE (which also (de)activates products).
+   */
+  @RequirePermission('PRODUCT_IMAGE')
+  @Post(':id/image')
+  @UseInterceptors(FileInterceptor('image', imageUploadOptions))
+  async updateImage(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file?.path) {
+      throw new BadRequestException('Image file is required (field "image")');
+    }
+    return this.productsService.updateImage(id, file.path);
+  }
+
+  @RequirePermission('PRODUCT_DELETE')
   @Delete(':id')
   async remove(@Param('id') id: string) {
     return this.productsService.remove(id);
   }
 
+  @RequirePermission('PRODUCT_UPDATE')
   @Patch(':id/deactivate')
   async deactivate(@Param('id') id: string) {
     return this.productsService.deactivate(id);
   }
 
+  @RequirePermission('PRODUCT_UPDATE')
   @Patch(':id/activate')
   async activate(@Param('id') id: string) {
     return this.productsService.activate(id);

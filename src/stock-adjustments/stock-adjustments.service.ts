@@ -210,6 +210,7 @@ export class StockAdjustmentsService {
           if (stock) {
             newStock = previousStock + absoluteQty;
             stock.quantity = newStock;
+            if (item.location?.trim()) stock.location = item.location.trim();
             await manager.save(Stock, stock);
           } else {
             newStock = absoluteQty;
@@ -218,6 +219,7 @@ export class StockAdjustmentsService {
               variantId: variant ? variant.id : null,
               warehouseId: warehouse.id,
               quantity: newStock,
+              location: item.location?.trim() || null,
             });
             stock = await manager.save(Stock, newStockEntity);
           }

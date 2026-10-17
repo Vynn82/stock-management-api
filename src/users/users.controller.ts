@@ -18,12 +18,17 @@ import { PaginationDto } from '../common/pagination';
 
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
 
+  @RequirePermission('USER_CREATE')
   @Post()
-  async create(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.create(createUserDto);
+  async create(
+    @Body() createUserDto: CreateUserDto,
+    @Req() req: authenticatedUserInterface.AuthenticatedRequest,
+  ) {
+    return this.usersService.create(createUserDto, req.user.roles);
   }
+  @RequirePermission('USER_VIEW')
   @Get(':id/roles')
   getRoles(@Param('id') id: string) {
     return this.usersService.getRoles(id);
@@ -35,10 +40,25 @@ export class UsersController {
     return this.usersService.findAll(query);
   }
 
+  // @Put(':id/role')
+  // @RequirePermission('USER_ROLE_UPDATE')
+  // updateRole(@Param('id') id: string, @Body() dto: UpdateUserRoleDto) {
+  //   return this.usersService.updateRole(id, dto.roleId);
+  // }
+
   @Put(':id/role')
   @RequirePermission('USER_ROLE_UPDATE')
-  updateRole(@Param('id') id: string, @Body() dto: UpdateUserRoleDto) {
-    return this.usersService.updateRole(id, dto.roleId);
+  updateRole(
+    @Param('id') id: string,
+    @Body() dto: UpdateUserRoleDto,
+    @Req() req: authenticatedUserInterface.AuthenticatedRequest,
+  ) {
+    return this.usersService.updateRole(
+      id,
+      dto.roleId,
+      req.user.sub,
+      req.user.roles,
+    );
   }
 
   @Get('me')

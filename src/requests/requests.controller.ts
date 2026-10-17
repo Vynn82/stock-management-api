@@ -26,7 +26,7 @@ import { RequestSource } from './enum/request-source.enum';
 import { CreateRequestDto } from './dto/create-request.dto';
 
 import { Public } from '../auth/decorators/public.decorator';
-import { productStorage } from '../common/cloudinary/cloudinary-storage';
+import { imageUploadOptions } from '../common/cloudinary/cloudinary-storage';
 import { RequirePermission } from '../auth/decorators/permission.decorator';
 import { CommitRequestDto } from './dto/commit-request.dto';
 import { PaginationDto } from '../common/pagination';
@@ -41,6 +41,7 @@ export class RequestsController {
     private readonly requestsService: RequestsService,
   ) {}
 
+  @RequirePermission('REQUEST_VIEW')
   @Get()
   findAll(
     @Req() req: authenticatedUserInterface.AuthenticatedRequest,
@@ -49,6 +50,19 @@ export class RequestsController {
     return this.requestsService.findAll(req.user.sub, query);
   }
 
+  /**
+   * Users the requester may add as certifier/approver (STAFF cannot use /users).
+   * Must stay above `:id`.
+   */
+  @RequirePermission('REQUEST_CREATE')
+  @Get('approver-candidates')
+  findApproverCandidates(
+    @Req() req: authenticatedUserInterface.AuthenticatedRequest,
+  ) {
+    return this.requestsService.findApproverCandidates(req.user.sub);
+  }
+
+  @RequirePermission('REQUEST_VIEW')
   @Get(':id')
   async findOne(
     @Param('id') id: string,
@@ -86,11 +100,10 @@ export class RequestsController {
   // MANUAL CREATE
   // =====================================================
 
+  @RequirePermission('REQUEST_CREATE')
   @Post()
   @UseInterceptors(
-    AnyFilesInterceptor({
-      storage: productStorage,
-    }),
+    AnyFilesInterceptor(imageUploadOptions),
   )
   create(
     @Body() body: any,
@@ -164,6 +177,7 @@ export class RequestsController {
   // EXCEL IMPORT
   // =====================================================
 
+  @RequirePermission('REQUEST_CREATE')
   @Post('import')
   @UseInterceptors(FileInterceptor('file'))
   importExcel(
@@ -201,6 +215,7 @@ export class RequestsController {
     return this.requestsService.create(dto, req.user.sub, RequestSource.EXCEL);
   }
 
+  @RequirePermission('REQUEST_VIEW')
   @Post(':id/commit')
   commit(
     @Param('id') requestId: string,

@@ -87,6 +87,151 @@ export class ProductsService {
     return createPaginatedResult(formattedData, total, filterDto);
   }
 
+  /**
+   * Exact lookup used by the scanner: matches a scanned/typed code against the
+   * product's code / SKU / barcode OR any of its variants' code / SKU / barcode
+   * (case-insensitive). Returns the full product (all variants + stock per
+   * warehouse) plus `matchedVariantId` when the code belonged to a variant.
+   */
+  async findByCode(rawCode: string) {
+    const code = rawCode?.trim();
+    if (!code) {
+      throw new BadRequestException('Code is required');
+    }
+
+    // Step 1: find the product id (filtering on the joined variants here
+    // would otherwise strip the sibling variants from the loaded result).
+    const hit = await this.productRepository
+      .createQueryBuilder('product')
+      .leftJoin('product.variants', 'variant')
+      .select(['product.id', 'variant.id'])
+      .addSelect(
+        `(LOWER(variant.code) = LOWER(:code) OR LOWER(variant.sku) = LOWER(:code) OR LOWER(variant.barcode) = LOWER(:code))`,
+        'variant_match',
+      )
+      .where('product.isActive = :isActive', { isActive: true })
+      .andWhere(
+        `(LOWER(product.code) = LOWER(:code)
+          OR LOWER(product.sku) = LOWER(:code)
+          OR LOWER(product.barcode) = LOWER(:code)
+          OR LOWER(variant.code) = LOWER(:code)
+          OR LOWER(variant.sku) = LOWER(:code)
+          OR LOWER(variant.barcode) = LOWER(:code))`,
+        { code },
+      )
+      .orderBy('variant_match', 'DESC', 'NULLS LAST')
+      .limit(1)
+      .getRawOne<{
+        product_id: string;
+        variant_id: string | null;
+        variant_match: boolean | null;
+      }>();
+
+    if (!hit) {
+      throw new NotFoundException('No product found for this code');
+    }
+
+    // Step 2: load the full product the same way the list does.
+    const product = await this.productRepository
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.category', 'category')
+      .leftJoinAndSelect('product.brand', 'brand')
+      .leftJoinAndSelect('product.supplier', 'supplier')
+      .leftJoinAndSelect('product.variants', 'variants')
+      .leftJoinAndSelect('variants.stocks', 'variantStocks')
+      .leftJoinAndSelect('variantStocks.warehouse', 'variantWarehouse')
+      .leftJoinAndSelect('product.stocks', 'stocks')
+      .leftJoinAndSelect('stocks.variant', 'stockVariant')
+      .leftJoinAndSelect('stocks.warehouse', 'warehouse')
+      .where('product.id = :id', { id: hit.product_id })
+      .getOne();
+
+    if (!product) {
+      throw new NotFoundException('No product found for this code');
+    }
+
+    return {
+      ...this.formatProduct(product),
+      matchedVariantId: hit.variant_match ? hit.variant_id : null,
+    };
+  }
+
+  /** Next internal product code: PRD-0001, PRD-0002, ... (race-safe within the transaction). */
+  private async generateProductCode(manager: EntityManager): Promise<string> {
+    await manager.query('SELECT pg_advisory_xact_lock(7001)');
+    const rows: Array<{ next: string }> = await manager.query(
+      `SELECT COALESCE(MAX(CAST(SUBSTRING(code FROM 5) AS INTEGER)), 0) + 1 AS next
+       FROM (
+         SELECT code FROM products
+         UNION ALL
+         SELECT product_code AS code FROM request_items
+       ) t
+       WHERE code ~ '^PRD-[0-9]+$'`,
+    );
+    const next = Number(rows[0]?.next ?? 1);
+    return `PRD-${String(next).padStart(4, '0')}`;
+  }
+
+  /** Builds a readable SKU like APL-IPHONE-15 and makes it unique with a numeric suffix. */
+  private async generateUniqueSku(
+    manager: EntityManager,
+    brandCode: string | null,
+    name: string,
+  ): Promise<string> {
+    const clean = (text: string) =>
+      text
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    const parts = [brandCode ? clean(brandCode).slice(0, 6) : '', clean(name).slice(0, 20)]
+      .filter(Boolean);
+    const base = parts.join('-') || 'ITEM';
+
+    let candidate = base;
+    let n = 1;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const inProduct = await manager.findOne(Product, {
+        where: { sku: candidate },
+      });
+      const inVariant = await manager.findOne(ProductVariant, {
+        where: { sku: candidate },
+      });
+      if (!inProduct && !inVariant) return candidate;
+      n += 1;
+      candidate = `${base}-${n}`;
+    }
+  }
+
+  private formatProduct(product: Product) {
+    return {
+      ...product,
+      costPrice: Number(product.costPrice),
+      sellingPrice: Number(product.sellingPrice),
+      minimumStock: Number(product.minimumStock),
+      maximumStock:
+        product.maximumStock !== null ? Number(product.maximumStock) : null,
+
+      variants: product.variants?.map((variant) => ({
+        ...variant,
+        costPrice:
+          variant.costPrice !== null ? Number(variant.costPrice) : null,
+        sellingPrice:
+          variant.sellingPrice !== null ? Number(variant.sellingPrice) : null,
+
+        stocks: variant.stocks?.map((stock) => ({
+          ...stock,
+          quantity: Number(stock.quantity),
+        })),
+      })),
+
+      stocks: product.stocks?.map((stock) => ({
+        ...stock,
+        quantity: Number(stock.quantity),
+      })),
+    };
+  }
+
   async findOne(id: string) {
     const product = await this.productRepository.findOne({
       where: {
@@ -105,6 +250,14 @@ export class ProductsService {
     }
 
     return product;
+  }
+
+  /** Sets (or replaces) the product photo with an already uploaded image URL. */
+  async updateImage(id: string, imageUrl: string) {
+    const product = await this.findOne(id);
+    product.image = imageUrl;
+    await this.productRepository.save(product);
+    return { message: 'Product image updated', image: imageUrl };
   }
 
   async remove(id: string) {
@@ -209,6 +362,59 @@ export class ProductsService {
     });
   }
 
+  /**
+   * Dry run of createManyDirect for the "review before confirm" screen: does
+   * the exact same inserts (so every real validation - unknown category,
+   * duplicate SKU, missing warehouse ... - applies) and then rolls the whole
+   * transaction back. Nothing is saved.
+   */
+  async previewManyDirect(batchItems: ProductDirectCreateBatchItem[]) {
+    if (!batchItems || batchItems.length === 0) {
+      throw new BadRequestException('No products to import');
+    }
+
+    class PreviewRollback extends Error {
+      constructor(public readonly rows: Record<string, unknown>[]) {
+        super('import preview rollback');
+      }
+    }
+
+    try {
+      await this.dataSource.transaction(async (manager) => {
+        const rows: Record<string, unknown>[] = [];
+        for (const item of batchItems) {
+          const p: any = await this.insertProductDirect(manager, item);
+          rows.push({
+            code: p.code,
+            name: p.name,
+            sku: p.sku,
+            unit: p.unit,
+            category: p.category?.name ?? item.product.categoryCode,
+            costPrice: p.costPrice,
+            sellingPrice: p.sellingPrice,
+            variantCount: (p.variants ?? []).length,
+            warehouses: [
+              ...new Set(item.stock.map((s) => s.warehouseCode)),
+            ].join(', '),
+            quantity: (p.stocks ?? []).reduce(
+              (sum: number, stk: any) => sum + Number(stk.quantity),
+              0,
+            ),
+            imageUrl: p.image ?? null,
+          });
+        }
+        // Throwing is what rolls the transaction back.
+        throw new PreviewRollback(rows);
+      });
+    } catch (e) {
+      if (e instanceof PreviewRollback) {
+        return { ok: true, count: e.rows.length, rows: e.rows };
+      }
+      throw e;
+    }
+    return { ok: true, count: 0, rows: [] };
+  }
+
   async exportAll(filterDto?: ProductFilterDto) {
     const queryBuilder = this.productRepository
       .createQueryBuilder('product')
@@ -293,7 +499,7 @@ export class ProductsService {
     }
 
     // 1. Resolve & normalize product fields
-    const code = productData.productCode ?? productData.code;
+    let code: string | undefined = productData.productCode ?? productData.code;
     const name = productData.productName ?? productData.name;
     const categoryCode = productData.categoryCode ?? productData.category;
     const brandCode = productData.brandCode ?? productData.brand ?? null;
@@ -302,7 +508,7 @@ export class ProductsService {
     const hasVariants =
       productData.hasVariants === true || productData.hasVariants === 'true';
     const unit = productData.unit;
-    const sku = productData.productSku ?? productData.sku;
+    let sku: string | undefined = productData.productSku ?? productData.sku;
     const barcode = productData.productBarcode ?? productData.barcode ?? null;
     const costPrice = Number(
       productData.productCostPrice ?? productData.costPrice ?? 0,
@@ -320,9 +526,6 @@ export class ProductsService {
     const description = productData.description ?? null;
 
     // Validation
-    if (!code) {
-      throw new BadRequestException('Product code is required');
-    }
     if (!name) {
       throw new BadRequestException('Product name is required');
     }
@@ -332,8 +535,18 @@ export class ProductsService {
     if (!unit) {
       throw new BadRequestException('Unit is required');
     }
-    if (!sku) {
-      throw new BadRequestException('Product SKU is required');
+
+    // Auto-generate the internal product code (PRD-0001, ...) when not supplied.
+    if (!code || !String(code).trim()) {
+      code = await this.generateProductCode(manager);
+    }
+    code = String(code).trim();
+
+    // Initial stock (warehouse + quantity >= 1) is required for a new product.
+    if (!Array.isArray(dto.stock) || dto.stock.length === 0) {
+      throw new BadRequestException(
+        `Product "${code}": initial stock is required (warehouse and quantity of at least 1)`,
+      );
     }
 
     // Check unique constraints on Product
@@ -344,13 +557,6 @@ export class ProductsService {
       throw new BadRequestException(
         `Product with code "${code}" already exists`,
       );
-    }
-
-    const existingProductBySku = await manager.findOne(Product, {
-      where: { sku },
-    });
-    if (existingProductBySku) {
-      throw new BadRequestException(`Product with SKU "${sku}" already exists`);
     }
 
     if (barcode) {
@@ -400,11 +606,26 @@ export class ProductsService {
       }
     }
 
+    // SKU: use the supplied one (must be unique) or generate APL-IP15 style.
+    if (sku && String(sku).trim()) {
+      sku = String(sku).trim();
+      const existingProductBySku = await manager.findOne(Product, {
+        where: { sku },
+      });
+      if (existingProductBySku) {
+        throw new BadRequestException(
+          `Product with SKU "${sku}" already exists`,
+        );
+      }
+    } else {
+      sku = await this.generateUniqueSku(manager, brand?.code ?? null, name);
+    }
+
     // 2. Create and persist Product directly
     const product = manager.create(Product, {
       code,
       name,
-      image: productImageUrl ?? null,
+      image: productImageUrl ?? productData.imageUrl ?? null,
       description,
       categoryId: category.id,
       brandId: brand?.id ?? null,
@@ -432,9 +653,10 @@ export class ProductsService {
 
     const savedVariants: ProductVariant[] = [];
     for (const v of variantDtos) {
-      const vCode = v.variantCode ?? v.code;
+      const vCode =
+        v.variantCode ?? v.code ?? `${code}-V${savedVariants.length + 1}`;
       const vName = v.variantName ?? v.name;
-      const vSku = v.variantSku ?? v.sku;
+      const vSku = v.variantSku ?? v.sku ?? `${sku}-V${savedVariants.length + 1}`;
       const vBarcode = v.variantBarcode ?? v.barcode ?? null;
       const vAttributes = v.variantAttributes ?? v.attributes ?? null;
       const vCostPrice =
@@ -550,6 +772,7 @@ export class ProductsService {
         variantId,
         warehouseId: warehouse.id,
         quantity,
+        location: s.location?.toString().trim() || null,
       });
 
       const savedStock = await manager.save(Stock, stock);

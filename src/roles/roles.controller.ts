@@ -33,6 +33,7 @@ export class RolesController {
     return this.rolesService.findOne(id);
   }
 
+  @RequirePermission('ROLE_VIEW')
   @Get(':id/permissions')
   getPermissions(@Param('id') id: string) {
     return this.rolesService.getPermissions(id);
@@ -65,21 +66,25 @@ export class RolesController {
   // MENUS
   // ==========================================
 
+  @RequirePermission('ROLE_VIEW')
   @Get(':id/menus')
   getMenus(@Param('id') id: string) {
     return this.rolesService.getMenus(id);
   }
 
+  @RequirePermission('ROLE_VIEW')
   @Get(':id/menus/manage')
   getMenusForManagement(@Param('id') id: string) {
     return this.rolesService.getMenusForManagement(id);
   }
 
+  @RequirePermission('ROLE_UPDATE')
   @Post(':roleId/menus/:menuId')
   addMenu(@Param('roleId') roleId: string, @Param('menuId') menuId: string) {
     return this.rolesService.addMenu(roleId, menuId);
   }
 
+  @RequirePermission('ROLE_UPDATE')
   @Delete(':roleId/menus/:menuId')
   removeMenu(@Param('roleId') roleId: string, @Param('menuId') menuId: string) {
     return this.rolesService.removeMenu(roleId, menuId);

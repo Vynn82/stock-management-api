@@ -3,8 +3,9 @@
 import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateRequestProductDto {
+  @IsOptional()
   @IsString()
-  productCode: string;
+  productCode?: string;
 
   @IsOptional()
   @IsString()

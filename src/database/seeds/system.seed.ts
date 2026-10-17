@@ -8,6 +8,7 @@ import { UserRole } from '../../users/entities/user-role.entity';
 
 import { Role } from '../../roles/role.entity';
 import { RolePermission } from '../../roles/role-permission.entity';
+import { RoleMenu } from '../../roles/role-menu.entity';
 
 import { Permission } from '../../permissions/permission.entity';
 
@@ -21,131 +22,45 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
     // 1. PERMISSIONS
     // =====================================================
 
+    // Builds { name: 'PRODUCT_VIEW', resource: 'product', action: 'view' }
+    const define = (resource: string, actions: string[]) =>
+      actions.map((action) => ({
+        name: `${resource}_${action}`.toUpperCase(),
+        resource,
+        action,
+      }));
+
     const permissionDefinitions = [
-      // ===================================================
-      // PRODUCT
-      // ===================================================
+      // Users (team members). USER_ROLE_UPDATE = change another user's role
+      ...define('user', ['view', 'create', 'role_update']),
 
-      {
-        name: 'PRODUCT_CREATE',
-        resource: 'product',
-        action: 'create',
-      },
-      {
-        name: 'PRODUCT_VIEW',
-        resource: 'product',
-        action: 'view',
-      },
-      {
-        name: 'PRODUCT_UPDATE',
-        resource: 'product',
-        action: 'update',
-      },
-      {
-        name: 'PRODUCT_DELETE',
-        resource: 'product',
-        action: 'delete',
-      },
+      // Access control
+      ...define('role', ['view', 'create', 'update', 'delete']),
+      ...define('permission', ['view', 'create', 'update', 'delete']),
+      ...define('menu', ['view', 'create', 'update', 'delete']),
 
-      // ===================================================
-      // STAFF
-      // ===================================================
+      // Catalog (products + variants)
+      ...define('product', ['view', 'create', 'update', 'delete', 'import', 'image']),
 
-      {
-        name: 'STAFF_CREATE',
-        resource: 'staff',
-        action: 'create',
-      },
-      {
-        name: 'STAFF_VIEW',
-        resource: 'staff',
-        action: 'view',
-      },
-      {
-        name: 'STAFF_UPDATE',
-        resource: 'staff',
-        action: 'update',
-      },
-      {
-        name: 'STAFF_DELETE',
-        resource: 'staff',
-        action: 'delete',
-      },
+      // Master data: VIEW to read, MANAGE to create / edit / (de)activate
+      ...define('category', ['view', 'manage']),
+      ...define('brand', ['view', 'manage']),
+      ...define('supplier', ['view', 'manage']),
+      ...define('warehouse', ['view', 'manage']),
 
-      // ===================================================
-      // ROLE
-      // ===================================================
+      // Stock. STOCK_ADJUST = change stock directly (no approval).
+      // ADJUSTMENT_VIEW = read the adjustment audit log.
+      ...define('stock', ['view', 'adjust']),
+      ...define('adjustment', ['view']),
 
-      {
-        name: 'ROLE_CREATE',
-        resource: 'role',
-        action: 'create',
-      },
-      {
-        name: 'ROLE_VIEW',
-        resource: 'role',
-        action: 'view',
-      },
-      {
-        name: 'ROLE_UPDATE',
-        resource: 'role',
-        action: 'update',
-      },
-      {
-        name: 'ROLE_DELETE',
-        resource: 'role',
-        action: 'delete',
-      },
+      // Approval workflow
+      ...define('request', ['view', 'create', 'certify', 'approve']),
 
-      // ===================================================
-      // PERMISSION
-      // ===================================================
+      // Purchase orders: Manager creates, Admin approves, Staff receives goods
+      ...define('po', ['view', 'create', 'approve', 'receive']),
 
-      {
-        name: 'PERMISSION_CREATE',
-        resource: 'permission',
-        action: 'create',
-      },
-      {
-        name: 'PERMISSION_VIEW',
-        resource: 'permission',
-        action: 'view',
-      },
-      {
-        name: 'PERMISSION_UPDATE',
-        resource: 'permission',
-        action: 'update',
-      },
-      {
-        name: 'PERMISSION_DELETE',
-        resource: 'permission',
-        action: 'delete',
-      },
-
-      // ===================================================
-      // MENU
-      // ===================================================
-
-      {
-        name: 'MENU_CREATE',
-        resource: 'menu',
-        action: 'create',
-      },
-      {
-        name: 'MENU_VIEW',
-        resource: 'menu',
-        action: 'view',
-      },
-      {
-        name: 'MENU_UPDATE',
-        resource: 'menu',
-        action: 'update',
-      },
-      {
-        name: 'MENU_DELETE',
-        resource: 'menu',
-        action: 'delete',
-      },
+      // Reports
+      ...define('report', ['view', 'send']),
     ];
 
     // =====================================================
@@ -225,67 +140,92 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
       (permission) => permission.name,
     );
 
-    const rolePermissionMap: Record<string, string[]> = {
-      // ===================================================
-      // SUPER ADMIN
-      // ===================================================
+    // Read-only access to catalog / master data / stock.
+    const READ_ONLY = [
+      'PRODUCT_VIEW',
+      'CATEGORY_VIEW',
+      'BRAND_VIEW',
+      'SUPPLIER_VIEW',
+      'WAREHOUSE_VIEW',
+      'STOCK_VIEW',
+    ];
 
+    const rolePermissionMap: Record<string, string[]> = {
+      // SUPER_ADMIN: everything (also bypassed in the guards)
       SUPER_ADMIN: allPermissionNames,
 
-      // ===================================================
-      // ADMIN
-      // ===================================================
-
+      // ADMIN: runs day-to-day operations and manages users.
+      // Does NOT edit roles / permissions / menus (system configuration).
       ADMIN: [
-        // Staff
-        'STAFF_CREATE',
-        'STAFF_VIEW',
-        'STAFF_UPDATE',
-        'STAFF_DELETE',
-
-        // Role
-        'ROLE_CREATE',
+        'USER_VIEW',
+        'USER_CREATE',
+        'USER_ROLE_UPDATE',
         'ROLE_VIEW',
-        'ROLE_UPDATE',
-        'ROLE_DELETE',
 
-        // Permission
-        'PERMISSION_CREATE',
-        'PERMISSION_VIEW',
-        'PERMISSION_UPDATE',
-        'PERMISSION_DELETE',
-
-        // Menu
-        'MENU_CREATE',
-        'MENU_VIEW',
-        'MENU_UPDATE',
-        'MENU_DELETE',
-
-        // Product
-        'PRODUCT_CREATE',
         'PRODUCT_VIEW',
+        'PRODUCT_CREATE',
         'PRODUCT_UPDATE',
         'PRODUCT_DELETE',
+        'PRODUCT_IMPORT',
+        'PRODUCT_IMAGE',
+
+        'CATEGORY_VIEW',
+        'CATEGORY_MANAGE',
+        'BRAND_VIEW',
+        'BRAND_MANAGE',
+        'SUPPLIER_VIEW',
+        'SUPPLIER_MANAGE',
+        'WAREHOUSE_VIEW',
+        'WAREHOUSE_MANAGE',
+
+        'STOCK_VIEW',
+        'STOCK_ADJUST',
+        'ADJUSTMENT_VIEW',
+
+        'REQUEST_VIEW',
+        'REQUEST_CREATE',
+        'REQUEST_CERTIFY',
+        'REQUEST_APPROVE',
+
+        'PO_VIEW',
+        'PO_APPROVE',
+
+        'REPORT_VIEW',
+        'REPORT_SEND',
       ],
 
-      // ===================================================
-      // MANAGER
-      // ===================================================
-
+      // MANAGER: supervises staff, reads everything, certifies AND approves requests.
+      // Changes to data go through requests (no direct create / adjust).
       MANAGER: [
-        // Staff
-        'STAFF_CREATE',
-        'STAFF_VIEW',
+        'USER_VIEW',
+        'USER_CREATE',
+        'USER_ROLE_UPDATE',
 
-        // Product
-        'PRODUCT_VIEW',
+        ...READ_ONLY,
+        'ADJUSTMENT_VIEW',
+
+        'REQUEST_VIEW',
+        'REQUEST_CREATE',
+        'REQUEST_CERTIFY',
+        'REQUEST_APPROVE',
+
+        'PRODUCT_IMPORT',
+        'PRODUCT_IMAGE',
+
+        'PO_VIEW',
+        'PO_CREATE',
+
+        'REPORT_VIEW',
       ],
 
-      // ===================================================
-      // STAFF
-      // ===================================================
-
-      STAFF: ['PRODUCT_VIEW', 'PRODUCT_CREATE'],
+      // STAFF: reads data and submits requests (create product, adjust stock...).
+      STAFF: [
+        ...READ_ONLY,
+        'REQUEST_VIEW',
+        'REQUEST_CREATE',
+        'PO_VIEW',
+        'PO_RECEIVE',
+      ],
     };
 
     for (const [roleName, permissionNames] of Object.entries(
@@ -327,102 +267,25 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
     // =====================================================
 
     const menuDefinitions = [
-      // ===================================================
-      // DASHBOARD
-      // ===================================================
+      { name: 'DASHBOARD', label: 'Dashboard', path: '/dashboard', icon: 'LayoutDashboard', parentName: null, sortOrder: 1 },
 
-      {
-        name: 'DASHBOARD',
-        label: 'Dashboard',
-        path: '/dashboard',
-        icon: 'LayoutDashboard',
-        parentName: null,
-        sortOrder: 1,
-      },
+      { name: 'INVENTORY', label: 'Inventory', path: null, icon: 'Warehouse', parentName: null, sortOrder: 2 },
+      { name: 'PRODUCTS', label: 'Products', path: '/products', icon: 'Package', parentName: 'INVENTORY', sortOrder: 1 },
+      { name: 'STOCK', label: 'Stock', path: '/stock', icon: 'Boxes', parentName: 'INVENTORY', sortOrder: 2 },
+      { name: 'WAREHOUSES', label: 'Warehouses', path: '/warehouses', icon: 'Building2', parentName: 'INVENTORY', sortOrder: 3 },
+      { name: 'CATEGORIES', label: 'Categories', path: '/categories', icon: 'Tags', parentName: 'INVENTORY', sortOrder: 4 },
+      { name: 'BRANDS', label: 'Brands', path: '/brands', icon: 'BadgeCheck', parentName: 'INVENTORY', sortOrder: 5 },
+      { name: 'SUPPLIERS', label: 'Suppliers', path: '/suppliers', icon: 'Truck', parentName: 'INVENTORY', sortOrder: 6 },
+      { name: 'ADJUSTMENTS', label: 'Stock Adjustments', path: '/stock-adjustments', icon: 'ClipboardList', parentName: 'INVENTORY', sortOrder: 7 },
 
-      // ===================================================
-      // INVENTORY
-      // ===================================================
+      { name: 'STAFF', label: 'Staff', path: '/staff', icon: 'Users', parentName: null, sortOrder: 3 },
 
-      {
-        name: 'INVENTORY',
-        label: 'Inventory',
-        path: null,
-        icon: 'Warehouse',
-        parentName: null,
-        sortOrder: 2,
-      },
+      { name: 'ACCESS_CONTROL', label: 'Access Control', path: null, icon: 'Shield', parentName: null, sortOrder: 4 },
+      { name: 'ROLES', label: 'Roles', path: '/roles', icon: 'ShieldCheck', parentName: 'ACCESS_CONTROL', sortOrder: 1 },
+      { name: 'PERMISSIONS', label: 'Permissions', path: '/permissions', icon: 'KeyRound', parentName: 'ACCESS_CONTROL', sortOrder: 2 },
 
-      {
-        name: 'PRODUCTS',
-        label: 'Products',
-        path: '/products',
-        icon: 'Package',
-        parentName: 'INVENTORY',
-        sortOrder: 1,
-      },
-
-      {
-        name: 'STOCK',
-        label: 'Stock',
-        path: '/stock',
-        icon: 'Boxes',
-        parentName: 'INVENTORY',
-        sortOrder: 2,
-      },
-
-      {
-        name: 'WAREHOUSES',
-        label: 'Warehouses',
-        path: '/warehouses',
-        icon: 'Building2',
-        parentName: 'INVENTORY',
-        sortOrder: 3,
-      },
-
-      // ===================================================
-      // STAFF
-      // ===================================================
-
-      {
-        name: 'STAFF',
-        label: 'Staff',
-        path: '/staff',
-        icon: 'Users',
-        parentName: null,
-        sortOrder: 3,
-      },
-
-      // ===================================================
-      // ACCESS CONTROL
-      // ===================================================
-
-      {
-        name: 'ACCESS_CONTROL',
-        label: 'Access Control',
-        path: null,
-        icon: 'Shield',
-        parentName: null,
-        sortOrder: 4,
-      },
-
-      {
-        name: 'ROLES',
-        label: 'Roles',
-        path: '/roles',
-        icon: 'ShieldCheck',
-        parentName: 'ACCESS_CONTROL',
-        sortOrder: 1,
-      },
-
-      {
-        name: 'PERMISSIONS',
-        label: 'Permissions',
-        path: '/permissions',
-        icon: 'KeyRound',
-        parentName: 'ACCESS_CONTROL',
-        sortOrder: 2,
-      },
+      { name: 'REQUESTS', label: 'Requests', path: '/requests', icon: 'ClipboardCheck', parentName: null, sortOrder: 5 },
+      { name: 'REPORTS', label: 'Reports', path: '/reports', icon: 'BarChart3', parentName: null, sortOrder: 6 },
     ];
 
     // =====================================================
@@ -497,6 +360,82 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
       }
 
       menus.set(menu.name, menu);
+    }
+
+    // =====================================================
+    // 5.3 ROLE -> MENUS
+    // =====================================================
+    // A child menu is only shown when its parent is also assigned,
+    // so parents (INVENTORY, ACCESS_CONTROL) are listed too.
+    // SUPER_ADMIN sees every active menu automatically.
+
+    const roleMenuMap: Record<string, string[]> = {
+      ADMIN: [
+        'DASHBOARD',
+        'INVENTORY',
+        'PRODUCTS',
+        'STOCK',
+        'WAREHOUSES',
+        'CATEGORIES',
+        'BRANDS',
+        'SUPPLIERS',
+        'ADJUSTMENTS',
+        'REQUESTS',
+        'REPORTS',
+        'STAFF',
+        'ACCESS_CONTROL',
+        'ROLES',
+      ],
+
+      MANAGER: [
+        'DASHBOARD',
+        'INVENTORY',
+        'PRODUCTS',
+        'STOCK',
+        'WAREHOUSES',
+        'CATEGORIES',
+        'BRANDS',
+        'SUPPLIERS',
+        'ADJUSTMENTS',
+        'REQUESTS',
+        'REPORTS',
+        'STAFF',
+      ],
+
+      STAFF: ['DASHBOARD', 'INVENTORY', 'PRODUCTS', 'STOCK', 'REQUESTS'],
+    };
+
+    for (const [roleName, menuNames] of Object.entries(roleMenuMap)) {
+      const role = roles.get(roleName);
+
+      if (!role) {
+        throw new Error(`Role ${roleName} not found`);
+      }
+
+      for (const menuName of menuNames) {
+        const menu = menus.get(menuName);
+
+        if (!menu) {
+          throw new Error(`Menu ${menuName} not found`);
+        }
+
+        const existing = await manager.findOne(RoleMenu, {
+          where: {
+            roleId: role.id,
+            menuId: menu.id,
+          },
+        });
+
+        if (!existing) {
+          await manager.save(
+            RoleMenu,
+            manager.create(RoleMenu, {
+              roleId: role.id,
+              menuId: menu.id,
+            }),
+          );
+        }
+      }
     }
 
     // =====================================================

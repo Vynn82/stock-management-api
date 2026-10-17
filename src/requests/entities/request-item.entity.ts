@@ -279,6 +279,14 @@ export class RequestItem {
   })
   adjustmentReason: string | null;
 
+  // Free-text shelf/bin the stock will sit in (copied to stocks.location on approval).
+  @Column({
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
+  location: string | null;
+
   // =====================================================
   // TIMESTAMPS
   // =====================================================

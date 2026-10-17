@@ -3,6 +3,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
 } from 'class-validator';
 
@@ -30,4 +31,8 @@ export class CreateUserDto {
   @IsString()
   @MaxLength(100)
   telegramChatId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  roleId?: string;
 }

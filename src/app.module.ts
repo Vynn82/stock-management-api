@@ -20,6 +20,7 @@ import { RequestsModule } from './requests/requests.module';
 import { MailsModule } from './mails/mails.module';
 import { StockModule } from './stock/stock.module';
 import { StockAdjustmentsModule } from './stock-adjustments/stock-adjustments.module';
+import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
 import { ReportsModule } from './reports/reports.module';
 
 @Module({
@@ -87,6 +88,7 @@ import { ReportsModule } from './reports/reports.module';
     StockModule,
 
     StockAdjustmentsModule,
+    PurchaseOrdersModule,
 
     ReportsModule,
   ],

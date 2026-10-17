@@ -88,6 +88,17 @@ export class Stock {
   quantity: number;
 
   // =========================
+  // LOCATION INSIDE THE WAREHOUSE (free text, e.g. "A-02-3")
+  // =========================
+
+  @Column({
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
+  location: string | null;
+
+  // =========================
   // TIMESTAMPS
   // =========================
 

@@ -22,4 +22,5 @@ export const PRODUCT_DIRECT_IMPORT_COLUMNS = [
   'variant_selling_price',
   'warehouse_code',
   'quantity',
+  'image_url',
 ];

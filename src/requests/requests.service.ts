@@ -119,9 +119,22 @@ export class RequestsService {
     productImageUrl?: string,
     variantImageUrls?: Record<string, string>,
   ) {
-    this.validateRequest(dto);
-
     return this.dataSource.transaction(async (manager) => {
+      // New products get their internal code (PRD-0001, ...) automatically,
+      // exactly like direct creation by an admin. Stock rows reference the
+      // product by this code, so fill it in before validating.
+      if (dto.requestType === RequestType.PRODUCT_CREATE && dto.product) {
+        const given = dto.product.productCode?.toString().trim();
+        dto.product.productCode = given || (await this.generateProductCode(manager));
+        for (const stockItem of dto.stock ?? []) {
+          if (!stockItem.productCode) {
+            stockItem.productCode = dto.product.productCode;
+          }
+        }
+      }
+
+      this.validateRequest(dto);
+
       const requestNo = this.generateRequestNo();
 
       const request = manager.create(Request, {
@@ -156,6 +169,10 @@ export class RequestsService {
         productImageUrl,
         variantImageUrls,
       );
+
+      // Stock movements only carry codes — snapshot the product details so the
+      // request list/detail can show names without extra lookups.
+      await this.enrichStockItems(manager, dto.requestType, requestItems);
 
       if (requestItems.length > 0) {
         await manager.save(RequestItem, requestItems);
@@ -830,6 +847,180 @@ export class RequestsService {
     });
   }
 
+  /**
+   * Active users the current user may put in the approval chain.
+   * STAFF cannot call the users API, so the request screen uses this.
+   * Only ADMIN / MANAGER / SUPER_ADMIN can be an APPROVER (see buildApprovers).
+   */
+  async findApproverCandidates(userId: string) {
+    const users = await this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.profile', 'profile')
+      .leftJoinAndSelect('user.userRoles', 'userRole')
+      .leftJoinAndSelect('userRole.role', 'role')
+      .where('user.status = :status', { status: UserStatus.ACTIVE })
+      .andWhere('user.id != :userId', { userId })
+      .orderBy('profile.firstName', 'ASC')
+      .getMany();
+
+    return users.map((user) => {
+      const roles = (user.userRoles ?? [])
+        .map((userRole) => userRole.role?.name)
+        .filter(Boolean) as string[];
+
+      return {
+        id: user.id,
+        staffId: user.staffId,
+        name: user.profile
+          ? `${user.profile.firstName} ${user.profile.lastName}`.trim()
+          : user.staffId,
+        roles,
+        canApprove: roles.some((role) =>
+          ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(role),
+        ),
+      };
+    });
+  }
+
+  /**
+   * STOCK_IN / STOCK_OUT / STOCK_TRANSFER / STOCK_ADJUSTMENT items only carry
+   * product + warehouse codes. Check they exist now (fail early, not at
+   * approval time) and copy the product name / SKU / unit / category onto the
+   * item the same way a product-create request does.
+   */
+  private async enrichStockItems(
+    manager: EntityManager,
+    requestType: RequestType,
+    items: RequestItem[],
+  ): Promise<void> {
+    const stockTypes = [
+      RequestType.STOCK_IN,
+      RequestType.STOCK_OUT,
+      RequestType.STOCK_TRANSFER,
+      RequestType.STOCK_ADJUSTMENT,
+    ];
+    if (!stockTypes.includes(requestType)) return;
+
+    const productCache = new Map<string, Product>();
+    const warehouseCodes = new Set<string>();
+
+    for (const item of items) {
+      let product = productCache.get(item.productCode);
+      if (!product) {
+        const found = await manager.findOne(Product, {
+          where: { code: item.productCode, isActive: true },
+          relations: { category: true, variants: true },
+        });
+        if (!found) {
+          throw new BadRequestException(
+            `Product ${item.productCode} not found or inactive`,
+          );
+        }
+        product = found;
+        productCache.set(item.productCode, product);
+      }
+
+      const variant = item.variantCode
+        ? product.variants?.find((v) => v.code === item.variantCode)
+        : undefined;
+      if (item.variantCode && !variant) {
+        throw new BadRequestException(
+          `Variant ${item.variantCode} not found for product ${item.productCode}`,
+        );
+      }
+      if (!item.variantCode && product.variants?.some((v) => v.isActive)) {
+        throw new BadRequestException(
+          `Product ${item.productCode} has variants — choose a variant`,
+        );
+      }
+
+      item.productName = product.name;
+      item.productSku = product.sku ?? '';
+      item.unit = product.unit ?? '';
+      item.categoryCode = product.category?.code ?? '';
+      item.productImage = item.productImage ?? product.image ?? null;
+      item.hasVariants = Boolean(product.variants?.length);
+      if (variant) {
+        item.variantName = variant.name;
+        item.variantSku = variant.sku;
+      }
+
+      for (const code of [
+        item.warehouseCode,
+        item.fromWarehouseCode,
+        item.toWarehouseCode,
+      ]) {
+        if (code) warehouseCodes.add(code);
+      }
+    }
+
+    for (const code of warehouseCodes) {
+      const warehouse = await manager.findOne(Warehouse, {
+        where: { code, isActive: true },
+      });
+      if (!warehouse) {
+        throw new BadRequestException(
+          `Warehouse ${code} not found or inactive`,
+        );
+      }
+    }
+  }
+
+  /** Next internal product code, also skipping codes reserved by pending requests. */
+  private async generateProductCode(manager: EntityManager): Promise<string> {
+    await manager.query('SELECT pg_advisory_xact_lock(7001)');
+    const rows: Array<{ next: string }> = await manager.query(
+      `SELECT COALESCE(MAX(CAST(SUBSTRING(code FROM 5) AS INTEGER)), 0) + 1 AS next
+       FROM (
+         SELECT code FROM products
+         UNION ALL
+         SELECT product_code AS code FROM request_items
+       ) t
+       WHERE code ~ '^PRD-[0-9]+$'`,
+    );
+    const next = Number(rows[0]?.next ?? 1);
+    return `PRD-${String(next).padStart(4, '0')}`;
+  }
+
+  /** Returns `base`, or `base-2`, `base-3`... until neither a product nor a variant uses it. */
+  private async ensureUniqueSku(
+    manager: EntityManager,
+    base: string,
+  ): Promise<string> {
+    let candidate = base;
+    let n = 1;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const inProduct = await manager.findOne(Product, {
+        where: { sku: candidate },
+      });
+      const inVariant = await manager.findOne(ProductVariant, {
+        where: { sku: candidate },
+      });
+      if (!inProduct && !inVariant) return candidate;
+      n += 1;
+      candidate = `${base}-${n}`;
+    }
+  }
+
+  /** Readable SKU like APL-IPHONE-15 from brand code + product name. */
+  private async generateSku(
+    manager: EntityManager,
+    brandCode: string | null,
+    name: string,
+  ): Promise<string> {
+    const clean = (text: string) =>
+      text
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    const parts = [
+      brandCode ? clean(brandCode).slice(0, 6) : '',
+      clean(name).slice(0, 20),
+    ].filter(Boolean);
+    return this.ensureUniqueSku(manager, parts.join('-') || 'ITEM');
+  }
+
   /// ========= Helper func ==============
   private generateRequestNo(): string {
     const now = new Date();
@@ -1402,7 +1593,10 @@ export class RequestsService {
     item.toWarehouseCode = stock?.toWarehouseCode ?? null;
 
     item.adjustmentType = stock?.adjustmentType ?? null;
-    item.adjustmentReason = stock?.adjustmentReason ?? null;
+    item.adjustmentReason = stock?.adjustmentReason ?? stock?.reason ?? null;
+
+    const location = stock?.location?.toString().trim();
+    item.location = location ? location : null;
 
     return item;
   }
@@ -1530,6 +1724,19 @@ export class RequestsService {
       approvers.push(approver);
     }
 
+    // The request is applied as soon as its LAST step is approved, so the
+    // last step must be a real APPROVER (ADMIN / MANAGER / SUPER_ADMIN —
+    // checked above), never a certifier-only chain.
+    const lastApprover = approvers[approvers.length - 1];
+    if (
+      lastApprover &&
+      lastApprover.actionType !== ApproverActionType.APPROVER
+    ) {
+      throw new BadRequestException(
+        'The last step of the approval chain must be an APPROVER',
+      );
+    }
+
     return approvers;
   }
 
@@ -1649,8 +1856,15 @@ export class RequestsService {
 
       stock:
         request.items
-          ?.filter((item) => item.warehouseCode !== null)
+          ?.filter(
+            (item) =>
+              item.warehouseCode !== null ||
+              item.fromWarehouseCode !== null ||
+              item.toWarehouseCode !== null,
+          )
           .map((item) => ({
+            productCode: item.productCode,
+            productName: item.productName,
             warehouseCode: item.warehouseCode,
             variantCode: item.variantCode,
             quantity: item.quantity,
@@ -1658,6 +1872,7 @@ export class RequestsService {
             toWarehouseCode: item.toWarehouseCode,
             adjustmentType: item.adjustmentType,
             adjustmentReason: item.adjustmentReason,
+            location: item.location ?? null,
           })) ?? [],
       approvers:
         request.approvers?.map((approver) => ({
@@ -1766,6 +1981,14 @@ export class RequestsService {
       },
     });
 
+    // SKU: use the requested one, or generate APL-IPHONE-15 style.
+    const requestedSku = item.productSku?.toString().trim();
+    const productSku = requestedSku
+      ? requestedSku
+      : product?.sku
+        ? product.sku
+        : await this.generateSku(manager, brand?.code ?? null, item.productName);
+
     // =====================================================
     // 5. UPDATE EXISTING PRODUCT
     // =====================================================
@@ -1782,7 +2005,7 @@ export class RequestsService {
       product.hasVariants = item.hasVariants;
       product.unit = item.unit;
 
-      product.sku = item.productSku;
+      product.sku = productSku;
       product.barcode = item.productBarcode;
 
       product.costPrice = item.productCostPrice ?? 0;
@@ -1813,7 +2036,7 @@ export class RequestsService {
       hasVariants: item.hasVariants,
       unit: item.unit,
 
-      sku: item.productSku,
+      sku: productSku,
       barcode: item.productBarcode,
 
       costPrice: item.productCostPrice ?? 0,
@@ -1849,6 +2072,17 @@ export class RequestsService {
         },
       });
 
+      // Variant SKU: requested one, else the existing one, else <product SKU>-<variant code>.
+      const requestedVariantSku = item.variantSku?.toString().trim();
+      const variantSku = requestedVariantSku
+        ? requestedVariantSku
+        : variant?.sku
+          ? variant.sku
+          : await this.ensureUniqueSku(
+              manager,
+              `${product.sku}-${item.variantCode}`,
+            );
+
       // =====================================================
       // UPDATE EXISTING VARIANT
       // =====================================================
@@ -1856,7 +2090,7 @@ export class RequestsService {
       if (variant) {
         variant.name = item.variantName ?? '';
 
-        variant.sku = item.variantSku!;
+        variant.sku = variantSku;
         variant.barcode = item.variantBarcode;
 
         variant.attributes = item.variantAttributes;
@@ -1882,7 +2116,7 @@ export class RequestsService {
         code: item.variantCode!,
         name: item.variantName ?? '',
 
-        sku: item.variantSku!,
+        sku: variantSku,
         barcode: item.variantBarcode,
 
         attributes: item.variantAttributes,
@@ -1987,6 +2221,9 @@ export class RequestsService {
 
       if (existingStock) {
         existingStock.quantity = Number(existingStock.quantity) + quantity;
+        if (item.location) {
+          existingStock.location = item.location;
+        }
 
         stocks.push(await manager.save(Stock, existingStock));
 
@@ -2002,6 +2239,7 @@ export class RequestsService {
         variantId: variant?.id ?? null,
         warehouseId: warehouse.id,
         quantity,
+        location: item.location ?? null,
       });
 
       stocks.push(await manager.save(Stock, stock));
@@ -2280,10 +2518,12 @@ export class RequestsService {
           variantId: variant?.id ?? null,
           warehouseId: warehouse.id,
           quantity,
+          location: item.location ?? null,
         });
       } else {
         // Add stock
         stock.quantity = Number(stock.quantity) + quantity;
+        if (item.location) stock.location = item.location;
       }
 
       await manager.save(Stock, stock);

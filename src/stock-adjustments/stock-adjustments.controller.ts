@@ -21,9 +21,9 @@ import {
   CreateStockAdjustmentItemDto,
 } from './dto/create-stock-adjustment.dto';
 import { StockAdjustmentQueryDto } from './dto/stock-adjustment-query.dto';
-import { RequireRoles } from '../auth/decorators/roles.decorator';
 import { Public } from '../auth/decorators/public.decorator';
 import * as authenticatedUserInterface from '../auth/interfaces/authenticated-request.interface';
+import { RequirePermission } from '../auth/decorators/permission.decorator';
 
 @Controller('stock-adjustments')
 export class StockAdjustmentsController {
@@ -35,7 +35,7 @@ export class StockAdjustmentsController {
   // DIRECT STOCK ADJUSTMENT (ADMIN & SUPER_ADMIN)
   // =====================================================
 
-  @RequireRoles('ADMIN', 'SUPER_ADMIN')
+  @RequirePermission('STOCK_ADJUST')
   @Post()
   async create(
     @Body() dto: CreateStockAdjustmentDto,
@@ -58,6 +58,7 @@ export class StockAdjustmentsController {
           adjustmentType: dto.adjustmentType,
           quantity: dto.quantity as number,
           reason: dto.reason as string,
+          location: dto.location,
         },
       ];
     } else {
@@ -73,7 +74,7 @@ export class StockAdjustmentsController {
   // DIRECT EXCEL IMPORT (ADMIN & SUPER_ADMIN)
   // =====================================================
 
-  @RequireRoles('ADMIN', 'SUPER_ADMIN')
+  @RequirePermission('STOCK_ADJUST')
   @UseInterceptors(FileInterceptor('file'))
   @Post('import')
   async importExcel(
@@ -107,11 +108,13 @@ export class StockAdjustmentsController {
   // AUDIT LOG LIST & DETAILS
   // =====================================================
 
+  @RequirePermission('ADJUSTMENT_VIEW')
   @Get()
   findAll(@Query() query: StockAdjustmentQueryDto) {
     return this.stockAdjustmentsService.findAll(query);
   }
 
+  @RequirePermission('ADJUSTMENT_VIEW')
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.stockAdjustmentsService.findOne(id);

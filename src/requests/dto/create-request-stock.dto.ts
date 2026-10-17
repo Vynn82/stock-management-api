@@ -1,8 +1,9 @@
 import { IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateRequestStockDto {
+  @IsOptional()
   @IsString()
-  productCode: string;
+  productCode?: string;
 
   @IsOptional()
   @IsString()
@@ -27,4 +28,8 @@ export class CreateRequestStockDto {
   @IsOptional()
   @IsString()
   reason?: string;
+
+  @IsOptional()
+  @IsString()
+  location?: string;
 }

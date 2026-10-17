@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -25,6 +26,12 @@ import {
   createPaginatedResult,
   getPaginationOptions,
 } from '../common/pagination';
+
+const ROLE_ASSIGNMENT_MAP: Record<string, string[]> = {
+  SUPER_ADMIN: ['MANAGER', 'STAFF'],
+  ADMIN: ['MANAGER', 'STAFF'],
+  MANAGER: ['STAFF'],
+};
 
 @Injectable()
 export class UsersService {
@@ -77,8 +84,9 @@ export class UsersService {
     return createPaginatedResult(users, total, paginationDto);
   }
 
-  async create(createUserDto: CreateUserDto) {
-    const { firstName, lastName, email, phone, telegramChatId } = createUserDto;
+  async create(createUserDto: CreateUserDto, requesterRoles: string[]) {
+    const { firstName, lastName, email, phone, telegramChatId, roleId } =
+      createUserDto;
 
     // 1. Check email
     const existingProfile = await this.userProfileRepository.findOne({
@@ -89,15 +97,24 @@ export class UsersService {
       throw new ConflictException('Email already exists');
     }
 
-    // 2. Get default STAFF role
-    const staffRole = await this.roleRepository.findOne({
-      where: {
-        name: 'STAFF',
-      },
-    });
+    // 2. Resolve target role (default STAFF) and check permission
+    const targetRole = roleId
+      ? await this.roleRepository.findOne({ where: { id: roleId } })
+      : await this.roleRepository.findOne({ where: { name: 'STAFF' } });
 
-    if (!staffRole) {
-      throw new NotFoundException('STAFF role not found');
+    if (!targetRole) {
+      throw new NotFoundException('Role not found');
+    }
+
+    const isSuperAdmin = requesterRoles.includes('SUPER_ADMIN');
+    const allowedTargets = requesterRoles.flatMap(
+      (r) => ROLE_ASSIGNMENT_MAP[r] ?? [],
+    );
+
+    if (!isSuperAdmin && !allowedTargets.includes(targetRole.name)) {
+      throw new ForbiddenException(
+        `You are not allowed to create a user with role ${targetRole.name}`,
+      );
     }
 
     // 3. Get next staff number
@@ -142,10 +159,10 @@ export class UsersService {
 
       await manager.save(UserProfile, profile);
 
-      // Assign default STAFF role
+      // Assign selected role
       const userRole = manager.create(UserRole, {
         userId: savedUser.id,
-        roleId: staffRole.id,
+        roleId: targetRole.id,
       });
 
       await manager.save(UserRole, userRole);
@@ -199,43 +216,101 @@ export class UsersService {
     });
   }
 
-  async updateRole(userId: string, roleId: string) {
-    // 1. Check user
-    const user = await this.userRepository.findOne({
-      where: { id: userId },
-    });
+  // async updateRole(userId: string, roleId: string, sub: string, roles: string[]) {
+  //   // 1. Check user
+  //   const user = await this.userRepository.findOne({
+  //     where: { id: userId },
+  //   });
 
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
+  //   if (!user) {
+  //     throw new NotFoundException('User not found');
+  //   }
 
-    // 2. Check role
-    const role = await this.roleRepository.findOne({
-      where: { id: roleId },
-    });
+  //   // 2. Check role
+  //   const role = await this.roleRepository.findOne({
+  //     where: { id: roleId },
+  //   });
 
-    if (!role) {
-      throw new BadRequestException('Role does not exist');
-    }
+  //   if (!role) {
+  //     throw new BadRequestException('Role does not exist');
+  //   }
 
-    // 3. Replace user's role
-    await this.dataSource.transaction(async (manager) => {
-      // Remove current role
-      await manager.delete(UserRole, {
-        userId,
-      });
+  //   // 3. Replace user's role
+  //   await this.dataSource.transaction(async (manager) => {
+  //     // Remove current role
+  //     await manager.delete(UserRole, {
+  //       userId,
+  //     });
 
-      // Assign new role
-      const userRole = manager.create(UserRole, {
-        userId,
-        roleId,
-      });
+  //     // Assign new role
+  //     const userRole = manager.create(UserRole, {
+  //       userId,
+  //       roleId,
+  //     });
 
-      await manager.save(UserRole, userRole);
-    });
+  //     await manager.save(UserRole, userRole);
+  //   });
 
-    return this.getRoles(userId);
+  //   return this.getRoles(userId);
+  // }
+
+  async updateRole(
+  userId: string,
+  roleId: string,
+  requesterId: string,
+  requesterRoles: string[],
+) {
+  // 0. Nobody can change their own role
+  if (userId === requesterId) {
+    throw new ForbiddenException('You cannot change your own role');
   }
+
+  // 1. Check user
+  const user = await this.userRepository.findOne({ where: { id: userId } });
+  if (!user) {
+    throw new NotFoundException('User not found');
+  }
+
+  // 2. Check role
+  const role = await this.roleRepository.findOne({ where: { id: roleId } });
+  if (!role) {
+    throw new BadRequestException('Role does not exist');
+  }
+
+  // 3. Hierarchy check (SUPER_ADMIN can manage everyone)
+  if (!requesterRoles.includes('SUPER_ADMIN')) {
+    const allowedTargets = requesterRoles.flatMap(
+      (r) => ROLE_ASSIGNMENT_MAP[r] ?? [],
+    );
+
+    // 3a. requester may assign the NEW role
+    if (!allowedTargets.includes(role.name)) {
+      throw new ForbiddenException(
+        `You are not allowed to assign role ${role.name}`,
+      );
+    }
+
+    // 3b. requester may manage the user's CURRENT role
+    const currentRoles = await this.getRoles(userId);
+    const currentNames = currentRoles.map((ur) => ur.role.name);
+
+    if (!currentNames.every((name) => allowedTargets.includes(name))) {
+      throw new ForbiddenException(
+        'You are not allowed to change this user\'s role',
+      );
+    }
+  }
+
+  // 4. Replace user's role (keep your existing transaction as-is)
+  await this.dataSource.transaction(async (manager) => {
+    await manager.delete(UserRole, { userId });
+    const userRole = manager.create(UserRole, { userId, roleId });
+    await manager.save(UserRole, userRole);
+  });
+
+  return this.getRoles(userId);
+}
+
   async getMe(userId: string) {
     const user = await this.userRepository.findOne({
       where: {

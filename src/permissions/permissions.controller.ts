@@ -11,22 +11,26 @@ import { PaginationDto } from '../common/pagination';
 export class PermissionsController {
   constructor(private readonly permissionsService: PermissionsService) {}
 
+  @RequirePermission('PERMISSION_VIEW')
   @Get()
   findAll(@Query() query: PaginationDto) {
     return this.permissionsService.findAll(query);
   }
 
+  @RequirePermission('PERMISSION_VIEW')
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.permissionsService.findOne(id);
   }
   // @RequirePermission('PERMISSION_CREATE')
+  @RequirePermission('PERMISSION_CREATE')
   @Post()
   create(@Body() dto: CreatePermissionDto) {
     return this.permissionsService.create(dto);
   }
 
   //@RequirePermission('PERMISSION_BULK_CREATE')
+  @RequirePermission('PERMISSION_CREATE')
   @Post('bulk')
   createBulk(@Body() dto: CreatePermissionsBulkDto) {
     return this.permissionsService.createBulk(dto.permissions);

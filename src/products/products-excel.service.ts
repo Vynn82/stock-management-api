@@ -12,17 +12,18 @@ export interface ProductDirectCreateBatchItem {
     supplierCode?: string | null;
     hasVariants: boolean;
     unit: string;
-    productSku: string;
+    productSku?: string | null;
     productBarcode?: string | null;
     productCostPrice?: number | null;
     productSellingPrice?: number | null;
     minimumStock?: number | null;
     maximumStock?: number | null;
+    imageUrl?: string | null;
   };
   variants: Array<{
     variantCode: string;
     variantName: string;
-    variantSku: string;
+    variantSku?: string | null;
     variantBarcode?: string | null;
     variantAttributes?: Record<string, string> | null;
     variantCostPrice?: number | null;
@@ -167,19 +168,19 @@ export class ProductsExcelService {
       throw new BadRequestException('Excel file is empty');
     }
 
-    // Find the header row (contains 'product_code')
+    // Find the header row: the first one (in the top 10) whose cells are
+    // exactly the key column names. Exact match, so a note line that merely
+    // mentions "product_code" is never mistaken for the header.
     let headerRowIndex = -1;
     for (let i = 0; i < Math.min(rawRows.length, 10); i++) {
       const candidateRow = rawRows[i];
-      if (
-        Array.isArray(candidateRow) &&
-        candidateRow.some((cell) =>
-          String(cell ?? '')
-            .trim()
-            .toLowerCase()
-            .includes('product_code'),
-        )
-      ) {
+      if (!Array.isArray(candidateRow)) continue;
+      const cells = candidateRow.map((cell) =>
+        String(cell ?? '')
+          .trim()
+          .toLowerCase(),
+      );
+      if (cells.includes('product_name') && cells.includes('category_code')) {
         headerRowIndex = i;
         break;
       }
@@ -187,7 +188,7 @@ export class ProductsExcelService {
 
     if (headerRowIndex === -1) {
       throw new BadRequestException(
-        'Could not find header row containing "product_code"',
+        'Could not find the header row: it must contain the columns "product_name" and "category_code". Use the Template file.',
       );
     }
 
@@ -199,13 +200,8 @@ export class ProductsExcelService {
     );
 
     // Validate required headers
-    const requiredHeaders = [
-      'product_code',
-      'product_name',
-      'category_code',
-      'unit',
-      'product_sku',
-    ];
+    // product_code and product_sku columns are optional (auto-generated).
+    const requiredHeaders = ['product_name', 'category_code', 'unit'];
     for (const reqHeader of requiredHeaders) {
       if (!headers.includes(reqHeader)) {
         throw new BadRequestException(
@@ -244,12 +240,17 @@ export class ProductsExcelService {
         }
       });
 
-      // Filter out guide rows if product_code is empty
-      if (
-        obj.product_code === null ||
-        obj.product_code === undefined ||
-        String(obj.product_code).trim() === ''
-      ) {
+      // A row with neither product_code nor product_name is blank: skip it.
+      // product_code may be left empty: the system then generates PRD-xxxx.
+      const hasCode =
+        obj.product_code !== null &&
+        obj.product_code !== undefined &&
+        String(obj.product_code).trim() !== '';
+      const hasName =
+        obj.product_name !== null &&
+        obj.product_name !== undefined &&
+        String(obj.product_name).trim() !== '';
+      if (!hasCode && !hasName) {
         continue;
       }
 
@@ -262,30 +263,49 @@ export class ProductsExcelService {
       );
     }
 
-    // Validate each row
+    // Validate every row and collect ALL problems (not just the first one),
+    // so the user can fix the whole sheet in one go.
+    const errors: string[] = [];
+    const check = (fn: () => unknown) => {
+      try {
+        fn();
+      } catch (e) {
+        errors.push(e instanceof Error ? e.message : String(e));
+      }
+    };
+
     for (const row of rowObjects) {
       const rNum = row.__rowNumber;
-      this.requiredString(row, 'product_code', rNum);
-      this.requiredString(row, 'product_name', rNum);
-      this.requiredString(row, 'category_code', rNum);
-      this.requiredString(row, 'unit', rNum);
-      this.requiredString(row, 'product_sku', rNum);
+      check(() => this.requiredString(row, 'product_name', rNum));
+      check(() => this.requiredString(row, 'category_code', rNum));
+      check(() => this.requiredString(row, 'unit', rNum));
+      // product_sku / variant_sku are optional: the system generates them.
 
-      const hasVariants = this.booleanValue(row, 'has_variants', rNum);
-      if (hasVariants) {
-        this.requiredString(row, 'variant_code', rNum);
-        this.requiredString(row, 'variant_sku', rNum);
-      }
+      check(() => {
+        const hasVariants = this.booleanValue(row, 'has_variants', rNum);
+        if (hasVariants) {
+          this.requiredString(row, 'variant_code', rNum);
+        }
+      });
 
-      if (row.warehouse_code && String(row.warehouse_code).trim() !== '') {
-        this.positiveNumber(row, 'quantity', rNum);
-      }
+      // Initial stock is required on every row: warehouse + quantity >= 1.
+      check(() => this.requiredString(row, 'warehouse_code', rNum));
+      check(() => this.positiveNumber(row, 'quantity', rNum));
+    }
+
+    if (errors.length > 0) {
+      throw new BadRequestException({
+        message: `Import validation failed: ${errors.length} problem(s) found`,
+        errors,
+      });
     }
 
     // Group rows by product_code
     const productGroups = new Map<string, Record<string, any>[]>();
     for (const row of rowObjects) {
-      const code = String(row.product_code).trim();
+      // Rows without a code are separate products (variants need a code).
+      const code =
+        String(row.product_code ?? '').trim() || `__auto_${row.__rowNumber}`;
       if (!productGroups.has(code)) {
         productGroups.set(code, []);
       }
@@ -295,7 +315,8 @@ export class ProductsExcelService {
     // Build batch payload
     const batchItems: ProductDirectCreateBatchItem[] = [];
 
-    for (const [productCode, rows] of productGroups.entries()) {
+    for (const [groupKey, rows] of productGroups.entries()) {
+      const productCode = groupKey.startsWith('__auto_') ? '' : groupKey;
       const first = rows[0];
       const hasVariants = this.booleanValue(
         first,
@@ -312,7 +333,7 @@ export class ProductsExcelService {
         supplierCode: this.optionalString(first.supplier_code),
         hasVariants,
         unit: String(first.unit).trim(),
-        productSku: String(first.product_sku).trim(),
+        productSku: this.optionalString(first.product_sku),
         productBarcode: this.optionalString(first.product_barcode),
         productCostPrice:
           this.optionalNonNegativeNumber(
@@ -351,6 +372,7 @@ export class ProductsExcelService {
           'maximum_stock',
           first.__rowNumber,
         ),
+        imageUrl: this.optionalString(first.image_url),
       };
 
       // Extract variants
@@ -367,11 +389,7 @@ export class ProductsExcelService {
               variantName:
                 this.optionalString(row.variant_name) ??
                 `${product.productName} (${vCode})`,
-              variantSku: this.requiredString(
-                row,
-                'variant_sku',
-                row.__rowNumber,
-              ),
+              variantSku: this.optionalString(row.variant_sku),
               variantBarcode: this.optionalString(row.variant_barcode),
               variantAttributes: this.parseAttributes(row.variant_attributes),
               variantCostPrice:

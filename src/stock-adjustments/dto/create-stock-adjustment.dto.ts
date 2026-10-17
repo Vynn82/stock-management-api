@@ -37,6 +37,10 @@ export class CreateStockAdjustmentItemDto {
   @IsString()
   @IsNotEmpty()
   reason: string;
+
+  @IsOptional()
+  @IsString()
+  location?: string;
 }
 
 export class CreateStockAdjustmentDto {
@@ -69,4 +73,8 @@ export class CreateStockAdjustmentDto {
   @IsOptional()
   @IsString()
   reason?: string;
+
+  @IsOptional()
+  @IsString()
+  location?: string;
 }

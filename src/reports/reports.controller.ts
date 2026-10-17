@@ -4,6 +4,7 @@ import { ReportsService } from './reports.service';
 import { TelegramService } from './telegram.service';
 import { SalesReportPdfService } from './pdf/sales-report-pdf.service';
 import { SalesReport } from './interfaces/report.interface';
+import { RequirePermission } from '../auth/decorators/permission.decorator';
 
 @Controller('reports')
 export class ReportsController {
@@ -16,6 +17,7 @@ export class ReportsController {
   /**
    * Get sales, spending, profit, and stock summary data as JSON.
    */
+  @RequirePermission('REPORT_VIEW')
   @Get('summary')
   async getSummary(
     @Query('period') period?: 'daily' | 'weekly',
@@ -27,6 +29,7 @@ export class ReportsController {
   /**
    * Preview the HTML UI generated for Telegram.
    */
+  @RequirePermission('REPORT_VIEW')
   @Get('preview')
   async getTelegramPreview(
     @Query('period') period?: 'daily' | 'weekly',
@@ -43,6 +46,7 @@ export class ReportsController {
   /**
    * Preview and download the generated corporate PDF report directly in browser.
    */
+  @RequirePermission('REPORT_VIEW')
   @Get('pdf')
   async getPdf(
     @Query('period') period: 'daily' | 'weekly',
@@ -71,6 +75,7 @@ export class ReportsController {
   /**
    * Manually trigger and send the 5:00 PM Daily Report to Telegram.
    */
+  @RequirePermission('REPORT_SEND')
   @Post('telegram/daily')
   async triggerDailyReport() {
     return this.reportsService.triggerDailyReportManual();
@@ -79,6 +84,7 @@ export class ReportsController {
   /**
    * Manually trigger and send the Weekly Report to Telegram.
    */
+  @RequirePermission('REPORT_SEND')
   @Post('telegram/weekly')
   async triggerWeeklyReport() {
     return this.reportsService.triggerWeeklyReportManual();
