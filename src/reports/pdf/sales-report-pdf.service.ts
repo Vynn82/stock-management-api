@@ -24,6 +24,7 @@ const COLORS = {
   warning: '#D97706', // Amber 600
   warningBg: '#FEF3C7', // Amber 100
   warningText: '#B45309', // Amber 700
+  secondaryBg: '#E5E7EB', // Gray 200 (Secondary card backgrounds)
 };
 
 // Geometry constants
