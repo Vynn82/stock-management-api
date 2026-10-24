@@ -1397,9 +1397,25 @@ export class CustomerOrdersService {
           );
         }
       } else if (dto.responseType === CustomerResponseType.REJECT) {
+        if (order.status === CustomerOrderStatus.WAITING_CUSTOMER) {
+          // Customer declined the shortage inquiry ("Don't Buy / Back"):
+          // Discard and delete the unplaced order completely so it is NOT saved in DB or order history!
+          await manager.delete(CustomerOrderMessage, { orderId: order.id });
+          await manager.delete(CustomerOrderItem, { orderId: order.id });
+          await manager.delete(CustomerOrderPayment, { orderId: order.id });
+          await manager.delete(CustomerOrder, { id: order.id });
+          return {
+            id: order.id,
+            orderNo: order.orderNo,
+            status: CustomerOrderStatus.CANCELLED,
+            discarded: true,
+          };
+        }
+
         order.status = CustomerOrderStatus.CANCELLED;
         await manager.save(CustomerOrder, order);
 
+        // Only send cancellation notification if the order was previously active/confirmed
         if (order.telegramChatId) {
           void this.telegramBotService.sendMessage(
             order.telegramChatId,
