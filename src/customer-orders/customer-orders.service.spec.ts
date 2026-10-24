@@ -559,7 +559,8 @@ describe('CustomerOrdersService Business Invariant Tests', () => {
         expect.stringMatching(/^ORD-/),
         75.0,
         1,
-        expect.anything(),
+        '123 Main St',
+        'saved-id',
       );
 
       expect(result).not.toBeNull();
