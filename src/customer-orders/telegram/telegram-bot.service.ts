@@ -176,9 +176,10 @@ export class TelegramBotService {
     itemId?: string,
   ): Promise<void> {
     const text =
-      `❓ <b>Question Regarding Your Order #${orderNo}</b>\n\n` +
+      `📦 <b>Order Received: #${orderNo}</b>\n\n` +
+      `⚠️ <b>Stock Notice:</b>\n` +
       `${question}\n\n` +
-      `Please tap an option below or type your response directly in this chat:`;
+      `<i>Please choose an option below or open your order in the Mini App:</i>`;
 
     const buttons: TelegramInlineButton[][] = [];
     const itemSuffix = itemId ? `:${itemId}` : '';

@@ -156,15 +156,47 @@ export class CustomerOrdersService {
         const subtotal = Number((unitPrice * requestedQty).toFixed(2));
         totalAmount += subtotal;
 
+        // Check available stock across all warehouses
+        const stockQuery = manager
+          .createQueryBuilder(Stock, 'stock')
+          .where('stock.product_id = :pId', { pId: product.id });
+
+        if (variant) {
+          stockQuery.andWhere('stock.variant_id = :vId', { vId: variant.id });
+        } else {
+          stockQuery.andWhere('stock.variant_id IS NULL');
+        }
+
+        const stocks = await stockQuery.getMany();
+        const totalAvailableStock = stocks.reduce(
+          (sum, s) => sum + Math.max(0, Number(s.quantity || 0)),
+          0,
+        );
+
+        let approvedQuantity = 0;
+        let waitingQuantity = 0;
+        let itemStatus = 'PENDING';
+
+        if (totalAvailableStock < requestedQty) {
+          // Automatic stock check & allocation
+          approvedQuantity = totalAvailableStock;
+          waitingQuantity = requestedQty - totalAvailableStock;
+          itemStatus = approvedQuantity > 0 ? 'PARTIAL' : 'WAITING_STOCK';
+        } else {
+          approvedQuantity = requestedQty;
+          waitingQuantity = 0;
+          itemStatus = 'PENDING';
+        }
+
         const orderItem = manager.create(CustomerOrderItem, {
           productId: product.id,
           variantId: variant ? variant.id : null,
           requestedQuantity: requestedQty,
-          approvedQuantity: 0,
-          waitingQuantity: 0,
+          approvedQuantity,
+          waitingQuantity,
           unitPrice,
           subtotal,
-          status: 'PENDING',
+          status: itemStatus,
         });
 
         orderItems.push(orderItem);
@@ -181,12 +213,19 @@ export class CustomerOrdersService {
         telegramUserId ||
         null;
 
+      const hasShortage = orderItems.some(
+        (item) => Number(item.waitingQuantity) > 0,
+      );
+      const initialStatus = hasShortage
+        ? CustomerOrderStatus.WAITING_CUSTOMER
+        : CustomerOrderStatus.PENDING_REVIEW;
+
       const newOrder = manager.create(CustomerOrder, {
         orderNo,
         customerId: customer.id,
         telegramUserId,
         telegramChatId,
-        status: CustomerOrderStatus.PENDING_REVIEW,
+        status: initialStatus,
         source: OrderSource.MINI_APP,
         createdByStaffId: null,
         deliveryStatus: DeliveryStatus.PENDING,
@@ -215,24 +254,78 @@ export class CustomerOrdersService {
       }
       await manager.save(CustomerOrderItem, orderItems);
 
-      // 5. Create initial audit log message
-      const initMessage = manager.create(CustomerOrderMessage, {
-        orderId: savedOrder.id,
-        senderType: MessageSenderType.SYSTEM,
-        message: `Order #${orderNo} submitted by customer. Awaiting staff review.`,
-        messageType: MessageType.STATUS_UPDATE,
-      });
-      await manager.save(CustomerOrderMessage, initMessage);
+      // 5. Create inquiry / audit message and notify
+      if (hasShortage) {
+        const shortageItem = orderItems.find(
+          (item) => Number(item.waitingQuantity) > 0,
+        )!;
+        const shortageProduct = await manager.findOne(Product, {
+          where: { id: shortageItem.productId },
+        });
+        const prodName = shortageProduct ? shortageProduct.name : 'the ordered item';
+        const proposedQty = Number(shortageItem.approvedQuantity);
+        const reqQty = Number(shortageItem.requestedQuantity);
 
-      // 6. Notify Customer on Telegram asynchronously
-      if (savedOrder.telegramChatId) {
-        this.telegramBotService
-          .notifyOrderCreated(savedOrder.telegramChatId, orderNo, totalAmount, savedOrder.id)
-          .catch((err) =>
-            this.logger.error(
-              `Failed to send order creation notification: ${err.message}`,
-            ),
-          );
+        let questionText = '';
+        if (proposedQty > 0) {
+          questionText = `We currently only have ${proposedQty} available in stock for ${prodName} (requested: ${reqQty}). Would you like to accept ${proposedQty} now, wait for the rest to be restocked, or cancel your order?`;
+        } else {
+          questionText = `${prodName} is currently out of stock (requested: ${reqQty}). Would you like to wait for restock or cancel your order?`;
+        }
+
+        const questionMessage = manager.create(CustomerOrderMessage, {
+          orderId: savedOrder.id,
+          senderType: MessageSenderType.STAFF,
+          senderName: 'Inventory System',
+          message: questionText,
+          messageType: MessageType.QUESTION,
+          metadata: {
+            proposedQuantity: proposedQty,
+            itemId: shortageItem.id,
+          },
+        });
+        await manager.save(CustomerOrderMessage, questionMessage);
+
+        if (savedOrder.telegramChatId) {
+          this.telegramBotService
+            .notifyStaffQuestion(
+              savedOrder.telegramChatId,
+              savedOrder.id,
+              orderNo,
+              questionText,
+              proposedQty,
+              reqQty,
+              shortageItem.id,
+            )
+            .catch((err) =>
+              this.logger.error(
+                `Failed to send auto stock inquiry notification: ${err.message}`,
+              ),
+            );
+        }
+      } else {
+        const initMessage = manager.create(CustomerOrderMessage, {
+          orderId: savedOrder.id,
+          senderType: MessageSenderType.SYSTEM,
+          message: `Order #${orderNo} submitted by customer. All items in stock, awaiting staff review.`,
+          messageType: MessageType.STATUS_UPDATE,
+        });
+        await manager.save(CustomerOrderMessage, initMessage);
+
+        if (savedOrder.telegramChatId) {
+          this.telegramBotService
+            .notifyOrderCreated(
+              savedOrder.telegramChatId,
+              orderNo,
+              totalAmount,
+              savedOrder.id,
+            )
+            .catch((err) =>
+              this.logger.error(
+                `Failed to send order creation notification: ${err.message}`,
+              ),
+            );
+        }
       }
 
       // 7. Notify internal Staff via Mails system
@@ -1135,33 +1228,34 @@ export class CustomerOrdersService {
       if (dto.responseType === CustomerResponseType.ACCEPT) {
         // Customer accepts proposed quantity
         const proposedQty = dto.acceptedQuantity;
+        let shortageItem: CustomerOrderItem | null = null;
 
         if (
           order.items.length > 0 &&
           proposedQty !== undefined &&
           proposedQty > 0
         ) {
-          const item = dto.itemId
-            ? order.items.find((i) => i.id === dto.itemId)
-            : order.items[0];
+          shortageItem = dto.itemId
+            ? (order.items.find((i) => i.id === dto.itemId) || null)
+            : (order.items.find((i) => Number(i.waitingQuantity) > 0) || order.items[0]);
 
-          if (item) {
+          if (shortageItem) {
             let warehouse: Warehouse | null = null;
-            if (item.warehouseId) {
+            if (shortageItem.warehouseId) {
               warehouse = await manager.findOne(Warehouse, {
-                where: { id: item.warehouseId, isActive: true },
+                where: { id: shortageItem.warehouseId, isActive: true },
               });
             }
 
             if (!warehouse) {
               const stockWithQty = await manager
                 .createQueryBuilder(Stock, 'stock')
-                .where('stock.product_id = :pId', { pId: item.productId })
+                .where('stock.product_id = :pId', { pId: shortageItem.productId })
                 .andWhere(
-                  item.variantId
+                  shortageItem.variantId
                     ? 'stock.variant_id = :vId'
                     : 'stock.variant_id IS NULL',
-                  item.variantId ? { vId: item.variantId } : {},
+                  shortageItem.variantId ? { vId: shortageItem.variantId } : {},
                 )
                 .andWhere('stock.quantity > 0')
                 .orderBy('stock.quantity', 'DESC')
@@ -1185,12 +1279,12 @@ export class CustomerOrdersService {
               const stockQuery = manager
                 .createQueryBuilder(Stock, 'stock')
                 .setLock('pessimistic_write')
-                .where('stock.product_id = :pId', { pId: item.productId })
+                .where('stock.product_id = :pId', { pId: shortageItem.productId })
                 .andWhere('stock.warehouse_id = :wId', { wId: warehouse.id });
 
-              if (item.variantId) {
+              if (shortageItem.variantId) {
                 stockQuery.andWhere('stock.variant_id = :vId', {
-                  vId: item.variantId,
+                  vId: shortageItem.variantId,
                 });
               } else {
                 stockQuery.andWhere('stock.variant_id IS NULL');
@@ -1205,15 +1299,91 @@ export class CustomerOrdersService {
                 await manager.save(Stock, stock);
               }
 
-              item.approvedQuantity = toApprove;
-              item.waitingQuantity = Number(item.requestedQuantity) - toApprove;
-              item.warehouseId = warehouse.id;
-              item.status =
-                item.waitingQuantity > 0 && toApprove === 0
+              shortageItem.approvedQuantity = toApprove;
+              shortageItem.waitingQuantity = Number(shortageItem.requestedQuantity) - toApprove;
+              shortageItem.warehouseId = warehouse.id;
+              shortageItem.status =
+                shortageItem.waitingQuantity > 0 && toApprove === 0
                   ? 'WAITING_STOCK'
                   : 'CONFIRMED';
-              await manager.save(CustomerOrderItem, item);
+              await manager.save(CustomerOrderItem, shortageItem);
             }
+          }
+        }
+
+        // Also ensure any other items in the order are fulfilled from available stock
+        for (const otherItem of order.items) {
+          if (shortageItem && otherItem.id === shortageItem.id) continue;
+          if (otherItem.status === 'CONFIRMED' || otherItem.status === 'WAITING_STOCK') continue;
+
+          let warehouse: Warehouse | null = null;
+          if (otherItem.warehouseId) {
+            warehouse = await manager.findOne(Warehouse, {
+              where: { id: otherItem.warehouseId, isActive: true },
+            });
+          }
+
+          if (!warehouse) {
+            const stockWithQty = await manager
+              .createQueryBuilder(Stock, 'stock')
+              .where('stock.product_id = :pId', { pId: otherItem.productId })
+              .andWhere(
+                otherItem.variantId
+                  ? 'stock.variant_id = :vId'
+                  : 'stock.variant_id IS NULL',
+                otherItem.variantId ? { vId: otherItem.variantId } : {},
+              )
+              .andWhere('stock.quantity > 0')
+              .orderBy('stock.quantity', 'DESC')
+              .getOne();
+
+            if (stockWithQty) {
+              warehouse = await manager.findOne(Warehouse, {
+                where: { id: stockWithQty.warehouseId, isActive: true },
+              });
+            }
+          }
+
+          if (!warehouse) {
+            warehouse = await manager.findOne(Warehouse, {
+              where: { isActive: true },
+              order: { createdAt: 'ASC' },
+            });
+          }
+
+          if (warehouse) {
+            const stockQuery = manager
+              .createQueryBuilder(Stock, 'stock')
+              .setLock('pessimistic_write')
+              .where('stock.product_id = :pId', { pId: otherItem.productId })
+              .andWhere('stock.warehouse_id = :wId', { wId: warehouse.id });
+
+            if (otherItem.variantId) {
+              stockQuery.andWhere('stock.variant_id = :vId', {
+                vId: otherItem.variantId,
+              });
+            } else {
+              stockQuery.andWhere('stock.variant_id IS NULL');
+            }
+
+            const stock = await stockQuery.getOne();
+            const available = stock ? Number(stock.quantity) : 0;
+            const reqQty = Number(otherItem.requestedQuantity);
+            const toApprove = Math.min(available, reqQty);
+
+            if (toApprove > 0 && stock) {
+              stock.quantity = available - toApprove;
+              await manager.save(Stock, stock);
+            }
+
+            otherItem.approvedQuantity = toApprove;
+            otherItem.waitingQuantity = reqQty - toApprove;
+            otherItem.warehouseId = warehouse.id;
+            otherItem.status =
+              otherItem.waitingQuantity > 0 && toApprove === 0
+                ? 'WAITING_STOCK'
+                : 'CONFIRMED';
+            await manager.save(CustomerOrderItem, otherItem);
           }
         }
 
