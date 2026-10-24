@@ -227,7 +227,7 @@ export class CustomerOrdersService {
       // 6. Notify Customer on Telegram asynchronously
       if (savedOrder.telegramChatId) {
         this.telegramBotService
-          .notifyOrderCreated(savedOrder.telegramChatId, orderNo, totalAmount)
+          .notifyOrderCreated(savedOrder.telegramChatId, orderNo, totalAmount, savedOrder.id)
           .catch((err) =>
             this.logger.error(
               `Failed to send order creation notification: ${err.message}`,
@@ -533,6 +533,7 @@ export class CustomerOrdersService {
             totalAmount,
             orderItems.length,
             deliveryAddress,
+            savedOrder.id,
           )
           .catch((err) =>
             this.logger.error(
@@ -837,6 +838,30 @@ export class CustomerOrdersService {
     order.status = CustomerOrderStatus.WAITING_CUSTOMER;
     await this.orderRepo.save(order);
 
+    // Resolve proposedQuantity dynamically if not provided or 0
+    let proposedQuantity =
+      dto.proposedQuantity !== undefined && Number(dto.proposedQuantity) > 0
+        ? Number(dto.proposedQuantity)
+        : undefined;
+
+    if (!proposedQuantity) {
+      // 1. Check if any item in the order has approvedQuantity > 0
+      const approvedItem = order.items?.find(
+        (i) => Number(i.approvedQuantity) > 0,
+      );
+      if (approvedItem && Number(approvedItem.approvedQuantity) > 0) {
+        proposedQuantity = Number(approvedItem.approvedQuantity);
+      } else if (dto.question) {
+        // 2. Parse numbers from the question text (e.g. "only 10 available", "accept 10", "10 units")
+        const match = dto.question.match(
+          /(?:only|have|accept|take|available|quantity of)?\s*(\b\d+\b)\s*(?:units?|pcs?|items?|available|left)?/i,
+        );
+        if (match && Number(match[1]) > 0) {
+          proposedQuantity = Number(match[1]);
+        }
+      }
+    }
+
     const message = this.messageRepo.create({
       orderId: order.id,
       senderType: MessageSenderType.STAFF,
@@ -844,7 +869,7 @@ export class CustomerOrdersService {
       message: dto.question,
       messageType: MessageType.QUESTION,
       metadata: {
-        proposedQuantity: dto.proposedQuantity,
+        proposedQuantity,
         itemId: dto.itemId,
       },
     });
@@ -856,14 +881,14 @@ export class CustomerOrdersService {
       const targetItem = order.items?.find((i) => i.id === dto.itemId);
       requestedQuantity = targetItem
         ? Number(targetItem.requestedQuantity)
-        : Number(dto.proposedQuantity || 0);
+        : Number(proposedQuantity || 0);
     } else {
       requestedQuantity = (order.items || []).reduce(
         (sum, i) => sum + Number(i.requestedQuantity),
         0,
       );
-      if (requestedQuantity === 0 && dto.proposedQuantity) {
-        requestedQuantity = dto.proposedQuantity;
+      if (requestedQuantity === 0 && proposedQuantity) {
+        requestedQuantity = proposedQuantity;
       }
     }
 
@@ -874,7 +899,7 @@ export class CustomerOrdersService {
         order.id,
         order.orderNo,
         dto.question,
-        dto.proposedQuantity,
+        proposedQuantity,
         requestedQuantity,
         dto.itemId,
       );
@@ -1304,6 +1329,8 @@ export class CustomerOrdersService {
     order.status = CustomerOrderStatus.PROCESSING;
     await this.orderRepo.save(order);
 
+
+
     await this.logStatusChange(
       order.id,
       staffId,
@@ -1328,6 +1355,8 @@ export class CustomerOrdersService {
     order.deliveryStatus = DeliveryStatus.OUT_FOR_DELIVERY;
     await this.orderRepo.save(order);
 
+
+
     await this.logStatusChange(order.id, staffId, 'Order is OUT FOR DELIVERY.');
 
     if (order.telegramChatId) {
@@ -1349,6 +1378,8 @@ export class CustomerOrdersService {
     // Order status is DELIVERED, but not COMPLETED until cash payment is recorded!
     order.status = CustomerOrderStatus.DELIVERED;
     await this.orderRepo.save(order);
+
+
 
     await this.logStatusChange(
       order.id,
@@ -1457,6 +1488,8 @@ export class CustomerOrdersService {
 
     order.status = CustomerOrderStatus.COMPLETED;
     await this.orderRepo.save(order);
+
+
 
     await this.logStatusChange(
       order.id,

@@ -113,12 +113,14 @@ export class TelegramBotService {
     chatId: string,
     orderNo: string,
     totalAmount: number,
+    orderId?: string,
   ): Promise<void> {
     const miniAppUrl = this.getMiniAppUrl();
+    const orderUrl = orderId ? `${miniAppUrl}/orders/${orderId}` : `${miniAppUrl}/orders`;
     const text =
       `📦 <b>Order Received!</b>\n\n` +
       `Order: <b>#${orderNo}</b>\n` +
-      `Total: <b>$${Number(totalAmount).toFixed(2)}</b>\n\n` +
+      `Total: <b>${Number(totalAmount).toFixed(2)}</b>\n\n` +
       `We have received your order and staff are currently reviewing stock availability.\n` +
       `<i>Payment is cash on delivery.</i>`;
 
@@ -126,7 +128,7 @@ export class TelegramBotService {
       [
         {
           text: '📱 View Order in Mini App',
-          web_app: { url: `${miniAppUrl}/orders` },
+          web_app: { url: orderUrl },
         },
       ],
     ]);
@@ -138,8 +140,10 @@ export class TelegramBotService {
     totalAmount: number,
     itemCount: number,
     deliveryAddress?: string | null,
+    orderId?: string,
   ): Promise<void> {
     const miniAppUrl = this.getMiniAppUrl();
+    const orderUrl = orderId ? `${miniAppUrl}/orders/${orderId}` : `${miniAppUrl}/orders`;
     const addressLine = deliveryAddress
       ? `\n📍 Delivery: <b>${deliveryAddress}</b>`
       : '';
@@ -147,7 +151,7 @@ export class TelegramBotService {
       `📋 <b>New Order Created by Sales Staff</b>\n\n` +
       `Order: <b>#${orderNo}</b>\n` +
       `Items: <b>${itemCount} item(s)</b>\n` +
-      `Total: <b>$${Number(totalAmount).toFixed(2)}</b>\n` +
+      `Total: <b>${Number(totalAmount).toFixed(2)}</b>\n` +
       `Status: <b>Confirmed</b>${addressLine}\n\n` +
       `Your order has been placed by our sales representative and confirmed for delivery.\n` +
       `<i>Payment is cash on delivery.</i>`;
@@ -156,7 +160,7 @@ export class TelegramBotService {
       [
         {
           text: '📱 View Order in Mini App',
-          web_app: { url: `${miniAppUrl}/orders` },
+          web_app: { url: orderUrl },
         },
       ],
     ]);
@@ -177,34 +181,33 @@ export class TelegramBotService {
       `Please tap an option below or type your response directly in this chat:`;
 
     const buttons: TelegramInlineButton[][] = [];
+    const itemSuffix = itemId ? `:${itemId}` : '';
+    const totalQty = requestedQuantity || 0;
 
     if (proposedQuantity !== undefined && proposedQuantity > 0) {
       const availQty = proposedQuantity;
-      const totalQty =
-        requestedQuantity && requestedQuantity > availQty
-          ? requestedQuantity
-          : availQty;
-      const itemSuffix = itemId ? `:${itemId}` : '';
+      const fullQty = totalQty > availQty ? totalQty : availQty;
 
       buttons.push([
         {
-          text: `⚡ Get Available Now (${availQty})`,
+          text: `⚡ Accept Available Now (${availQty})`,
           callback_data: `ACCEPT_QTY:${orderId}:${availQty}${itemSuffix}`,
         },
       ]);
 
-      if (totalQty > availQty) {
-        buttons.push([
-          {
-            text: `⏳ Wait for All (${totalQty})`,
-            callback_data: `WAIT_ALL:${orderId}:${totalQty}${itemSuffix}`,
-          },
-        ]);
-      }
+      buttons.push([
+        {
+          text:
+            fullQty > availQty
+              ? `⏳ Wait for Full Order (${fullQty})`
+              : '⏳ Wait for Restock',
+          callback_data: `WAIT_ALL:${orderId}:${fullQty}${itemSuffix}`,
+        },
+      ]);
 
       buttons.push([
         {
-          text: '❌ Cancel',
+          text: '❌ Cancel Order',
           callback_data: `CANCEL_ORDER:${orderId}`,
         },
       ]);
@@ -217,7 +220,16 @@ export class TelegramBotService {
       ]);
       buttons.push([
         {
-          text: '❌ Cancel',
+          text:
+            totalQty > 0
+              ? `⏳ Wait for Full Order (${totalQty})`
+              : '⏳ Wait for Restock',
+          callback_data: `WAIT_ALL:${orderId}:${totalQty}${itemSuffix}`,
+        },
+      ]);
+      buttons.push([
+        {
+          text: '❌ Cancel Order',
           callback_data: `CANCEL_ORDER:${orderId}`,
         },
       ]);
