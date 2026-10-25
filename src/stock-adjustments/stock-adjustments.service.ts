@@ -2,6 +2,9 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Inject,
+  Optional,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, IsNull, Repository } from 'typeorm';
@@ -12,6 +15,7 @@ import { Stock } from '../stock/entities/stock.entity';
 import { Product } from '../products/entities/product.entity';
 import { ProductVariant } from '../product-variants/entities/product-variant.entity';
 import { Warehouse } from '../warehouses/entities/warehouse.entity';
+import { CustomerOrdersService } from '../customer-orders/customer-orders.service';
 import {
   CreateStockAdjustmentItemDto,
   StockAdjustmentType,
@@ -42,6 +46,9 @@ export class StockAdjustmentsService {
     private readonly warehouseRepo: Repository<Warehouse>,
 
     private readonly dataSource: DataSource,
+    @Optional()
+    @Inject(forwardRef(() => CustomerOrdersService))
+    private readonly customerOrdersService?: CustomerOrdersService,
   ) {}
 
   /**
@@ -252,6 +259,17 @@ export class StockAdjustmentsService {
               location: item.location?.trim() || null,
             });
             stock = await manager.save(Stock, newStockEntity);
+          }
+
+          // Automatically allocate incoming stock to waiting customer orders (FIFO)
+          if (this.customerOrdersService) {
+            await this.customerOrdersService.allocateWaitingStock(
+              manager,
+              product.id,
+              variant ? variant.id : null,
+              warehouse.id,
+              absoluteQty,
+            );
           }
         }
 

@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository, IsNull } from 'typeorm';
 
 import { Customer } from './entities/customer.entity';
 import { CustomerOrder } from './entities/customer-order.entity';
@@ -217,7 +217,7 @@ export class CustomerOrdersService {
         (item) => Number(item.waitingQuantity) > 0,
       );
       const initialStatus = hasShortage
-        ? CustomerOrderStatus.WAITING_CUSTOMER
+        ? CustomerOrderStatus.WAITING_STOCK
         : CustomerOrderStatus.PENDING_REVIEW;
 
       const newOrder = manager.create(CustomerOrder, {
@@ -254,52 +254,34 @@ export class CustomerOrdersService {
       }
       await manager.save(CustomerOrderItem, orderItems);
 
-      // 5. Create inquiry / audit message and notify
+      // 5. Create queued / audit message and notify
       if (hasShortage) {
-        const shortageItem = orderItems.find(
+        const waitingItems = orderItems.filter(
           (item) => Number(item.waitingQuantity) > 0,
-        )!;
-        const shortageProduct = await manager.findOne(Product, {
-          where: { id: shortageItem.productId },
-        });
-        const prodName = shortageProduct ? shortageProduct.name : 'the ordered item';
-        const proposedQty = Number(shortageItem.approvedQuantity);
-        const reqQty = Number(shortageItem.requestedQuantity);
+        );
+        const waitingSummary = waitingItems
+          .map((i) => `${i.waitingQuantity} unit(s)`)
+          .join(', ');
 
-        let questionText = '';
-        if (proposedQty > 0) {
-          questionText = `We currently only have ${proposedQty} available in stock for ${prodName} (requested: ${reqQty}). Would you like to accept ${proposedQty} now, wait for the rest to be restocked, or cancel your order?`;
-        } else {
-          questionText = `${prodName} is currently out of stock (requested: ${reqQty}). Would you like to wait for restock or cancel your order?`;
-        }
-
-        const questionMessage = manager.create(CustomerOrderMessage, {
+        const statusMessage = manager.create(CustomerOrderMessage, {
           orderId: savedOrder.id,
-          senderType: MessageSenderType.STAFF,
-          senderName: 'Inventory System',
-          message: questionText,
-          messageType: MessageType.QUESTION,
-          metadata: {
-            proposedQuantity: proposedQty,
-            itemId: shortageItem.id,
-          },
+          senderType: MessageSenderType.SYSTEM,
+          message: `Order #${orderNo} placed. Order is queued as WAITING_STOCK (${waitingSummary} waiting). Items will be automatically allocated and confirmed once restocked.`,
+          messageType: MessageType.STATUS_UPDATE,
         });
-        await manager.save(CustomerOrderMessage, questionMessage);
+        await manager.save(CustomerOrderMessage, statusMessage);
 
         if (savedOrder.telegramChatId) {
           this.telegramBotService
-            .notifyStaffQuestion(
+            .notifyOrderCreated(
               savedOrder.telegramChatId,
-              savedOrder.id,
               orderNo,
-              questionText,
-              proposedQty,
-              reqQty,
-              shortageItem.id,
+              totalAmount,
+              savedOrder.id,
             )
             .catch((err) =>
               this.logger.error(
-                `Failed to send auto stock inquiry notification: ${err.message}`,
+                `Failed to send order creation notification: ${err.message}`,
               ),
             );
         }
@@ -1752,6 +1734,19 @@ export class CustomerOrdersService {
 
       await manager.save(CustomerOrderItem, item);
       remainingStockToAllocate -= allocateQty;
+
+      // Deduct the allocated quantity from warehouse stock so it is reserved for this customer
+      const stockToDeduct = await manager.findOne(Stock, {
+        where: {
+          productId,
+          variantId: variantId ? variantId : IsNull(),
+          warehouseId,
+        },
+      });
+      if (stockToDeduct && Number(stockToDeduct.quantity) >= allocateQty) {
+        stockToDeduct.quantity = Number(stockToDeduct.quantity) - allocateQty;
+        await manager.save(Stock, stockToDeduct);
+      }
 
       // Check if the whole order is now fully fulfilled
       const allOrderItems = await manager.find(CustomerOrderItem, {

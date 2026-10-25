@@ -3,6 +3,9 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Inject,
+  Optional,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
@@ -28,6 +31,7 @@ import { Stock } from '../stock/entities/stock.entity';
 import { StockAdjustment } from '../stock-adjustments/entities/stock-adjustment.entity';
 import { User } from '../users/entities/user.entity';
 import { PurchaseOrdersExcelService } from './purchase-orders-excel.service';
+import { CustomerOrdersService } from '../customer-orders/customer-orders.service';
 import {
   createPaginatedResult,
   getPaginationOptions,
@@ -64,6 +68,9 @@ export class PurchaseOrdersService {
     private readonly poRepo: Repository<PurchaseOrder>,
     private readonly dataSource: DataSource,
     private readonly excel: PurchaseOrdersExcelService,
+    @Optional()
+    @Inject(forwardRef(() => CustomerOrdersService))
+    private readonly customerOrdersService?: CustomerOrdersService,
   ) {}
 
   // ------------------------------------------------------------------ create
@@ -550,6 +557,17 @@ export class PurchaseOrdersService {
               quantity,
               location: null,
             }),
+          );
+        }
+
+        // Automatically allocate received stock to waiting customer orders (FIFO)
+        if (this.customerOrdersService) {
+          await this.customerOrdersService.allocateWaitingStock(
+            manager,
+            productId,
+            item.variantId ?? null,
+            po.warehouseId,
+            quantity,
           );
         }
 

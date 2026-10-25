@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { StockAdjustmentsService } from './stock-adjustments.service';
 import { StockAdjustmentsController } from './stock-adjustments.controller';
@@ -8,6 +8,7 @@ import { Product } from '../products/entities/product.entity';
 import { ProductVariant } from '../product-variants/entities/product-variant.entity';
 import { Warehouse } from '../warehouses/entities/warehouse.entity';
 import { User } from '../users/entities/user.entity';
+import { CustomerOrdersModule } from '../customer-orders/customer-orders.module';
 
 @Module({
   imports: [

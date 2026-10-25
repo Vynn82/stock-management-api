@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { PurchaseOrdersController } from './purchase-orders.controller';
@@ -16,6 +16,7 @@ import { ProductVariant } from '../product-variants/entities/product-variant.ent
 import { Stock } from '../stock/entities/stock.entity';
 import { StockAdjustment } from '../stock-adjustments/entities/stock-adjustment.entity';
 import { User } from '../users/entities/user.entity';
+import { CustomerOrdersModule } from '../customer-orders/customer-orders.module';
 
 @Module({
   imports: [
