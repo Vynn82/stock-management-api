@@ -10,6 +10,7 @@ A comprehensive guide and reference for all endpoints, authentication rules, glo
 2. [Global Guards & RBAC Architecture](#2-global-guards--rbac-architecture)
 3. [Global Pagination System](#3-global-pagination-system)
 4. [Authentication API (`/auth`)](#4-authentication-api-auth)
+    - [Forgot password (email OTP)](#44-forgot-password-email-otp)
 5. [User Management API (`/users`)](#5-user-management-api-users)
 6. [Roles & Role-Menu/Permission API (`/roles`)](#6-roles--role-menupermission-api-roles)
 7. [Permissions API (`/permissions`)](#7-permissions-api-permissions)
@@ -51,6 +52,8 @@ A comprehensive guide and reference for all endpoints, authentication rules, glo
     - [22.3 Product Variant-Specific Barcodes & QR Codes](#223-product-variant-specific-barcodes--qr-codes)
     - [22.4 Printable Thermal PDF Labels](#224-printable-thermal-pdf-labels)
     - [22.5 Automatic Barcode Generation & Real-time QR Synchronization](#225-automatic-barcode-generation--real-time-qr-synchronization)
+23. [Purchase Orders & Goods Receiving API (`/purchase-orders`)](#23-purchase-orders--goods-receiving-api-purchase-orders)
+24. [Permission Codes by Role](#24-permission-codes-by-role)
 
 ---
 
@@ -91,6 +94,7 @@ The API implements three global application guards:
 3. **`PermissionGuard`**:
    - Checks user role permissions for routes decorated with `@RequirePermission('PERMISSION_NAME')`.
    - Users with the **`SUPER_ADMIN`** role automatically bypass all permission checks.
+   - The full list of permission codes and which role holds them is in [Section 24](#24-permission-codes-by-role).
 
 ---
 
@@ -250,6 +254,32 @@ import {
 {
   "accessToken": "eyJhbGciOiJIUzI1NiIsIn...",
   "refreshToken": "new-refresh-token-uuid"
+}
+```
+
+---
+
+### 4.4 Forgot Password (email OTP)
+
+Three public steps. The user never needs to be logged in.
+
+| Step | Endpoint | Body | Result |
+| :--- | :--- | :--- | :--- |
+| 1 | `POST /auth/forgot-password` | `{ "staffId": "KH00001" }` | Emails a 6-digit code to the staff member. The reply is always the same generic message, so the endpoint cannot be used to find out which Staff IDs exist. |
+| 2 | `POST /auth/verify-reset-otp` | `{ "staffId": "KH00001", "otp": "123456" }` | `{ "resetToken": "..." }` |
+| 3 | `POST /auth/reset-password` | `{ "resetToken": "...", "newPassword": "NewPassword123!" }` | `{ "message": "Password has been reset successfully" }` |
+
+- **Access**: Public for all three steps.
+- The code and the `resetToken` are valid for **10 minutes**.
+- A new code can be requested at most once per **60 seconds**.
+- After **5 wrong codes** the request is locked; the user must ask for a new code.
+- `newPassword` must be at least 8 characters.
+
+Step 1 response (`200 OK`):
+
+```json
+{
+  "message": "If the Staff ID exists, a verification code has been sent to its email address."
 }
 ```
 
@@ -585,9 +615,20 @@ Returns current authenticated user record with profile, roles array, permissions
   "contactPerson": "Alice Smith",
   "phone": "+85512345678",
   "email": "contact@globaltech.com",
-  "address": "Phnom Penh Special Economic Zone"
+  "address": "Phnom Penh Special Economic Zone",
+  "platform": "TELEGRAM",
+  "platformLink": "https://t.me/globaltech",
+  "country": "Cambodia"
 }
 ```
+
+| Field | Type | Notes |
+| :--- | :--- | :--- |
+| `platform` | string (optional) | How the supplier is contacted. One of `TELEGRAM`, `WHATSAPP`, `FACEBOOK`, `WECHAT`, `LINE`, `INSTAGRAM`, `WEBSITE`, `OTHER`. |
+| `platformLink` | string (optional) | Link or handle on that platform, up to 300 characters. |
+| `country` | string (optional) | Where the supplier is based, up to 100 characters. |
+
+Permissions: `SUPPLIER_VIEW` to read, `SUPPLIER_MANAGE` to create / update / (de)activate.
 
 ---
 
@@ -599,6 +640,7 @@ Returns current authenticated user record with profile, roles array, permissions
 | :------ | :--------------------------- | :---------------------------- | :------------------------------------- |
 | `POST`  | `/warehouses`                | -                             | Create warehouse                       |
 | `GET`   | `/warehouses`                | `?page=1&limit=10&search=...` | List all active warehouses (Paginated) |
+| `GET`   | `/warehouses/capacity-check` | `?warehouseCode=...&quantity=...` | How full the warehouse gets if `quantity` more units go in |
 | `GET`   | `/warehouses/:id`            | `:id` (UUID)                  | Get warehouse by ID                    |
 | `PATCH` | `/warehouses/:id`            | `:id` (UUID)                  | Update warehouse                       |
 | `PATCH` | `/warehouses/:id/deactivate` | `:id` (UUID)                  | Deactivate warehouse                   |
@@ -617,9 +659,31 @@ Returns current authenticated user record with profile, roles array, permissions
   "latitude": 11.5564,
   "longitude": 104.9282,
   "contactPerson": "Dara Meng",
-  "phone": "+85598765432"
+  "phone": "+85598765432",
+  "capacity": 5000
 }
 ```
+
+- `capacity` (optional): the most units the warehouse may hold. Leave it out or send `null` for **no limit**. Minimum `1`, up to 3 decimals.
+- Anything that adds stock to the warehouse (Stock In, Transfer, increase adjustments, product create / import with initial stock, approved requests, purchase orders and goods receiving) is rejected when it would go over the capacity.
+
+**Capacity check** (`GET /warehouses/capacity-check?warehouseCode=WH-PP-MAIN&quantity=120`, permission `WAREHOUSE_VIEW`):
+
+```json
+{
+  "warehouse": { "code": "WH-PP-MAIN", "name": "Phnom Penh Central Distribution" },
+  "capacity": 5000,
+  "used": 4300,
+  "incoming": 0,
+  "orderQuantity": 120,
+  "projected": 4420,
+  "freeAfter": 580,
+  "percentAfter": 88.4,
+  "level": "ok"
+}
+```
+
+`level` is `ok`, `nearly_full` (90% or more after the movement), `over` (does not fit) or `unlimited` (no capacity set; `capacity`, `freeAfter` and `percentAfter` are then `null`).
 
 ---
 
@@ -1007,6 +1071,62 @@ Exports active products, their variants, and current warehouse stock records int
 
 ---
 
+### 13.10 Import Preview (check a file before importing)
+
+- **Endpoint**: `POST /products/import/preview`
+- **Permission**: `PRODUCT_IMPORT` (Admin, Manager, Super Admin)
+- **Content-Type**: `multipart/form-data`, field `file` (Excel / CSV in the same format as [13.7](#137-download-direct-product-import-template))
+- Saves **nothing**. Problems in the file never cause an error response; they come back in a list so the review screen can show every one of them:
+
+```json
+{ "ok": false, "message": "2 rows have problems", "errors": ["Row 3: category_code 'XYZ' not found", "Row 5: sku already exists"] }
+```
+
+When the file is clean the response is `{ "ok": true, "count": <rows>, "rows": [...] }` with the rows that would be created. Call `POST /products/import` with the same file to really import.
+
+### 13.11 Find a Product by Code (scanner)
+
+- **Endpoint**: `GET /products/by-code/:code`
+- **Permission**: `PRODUCT_VIEW`
+- Exact match on product code, variant code, SKU or barcode. Used by the mobile Scan screen.
+
+### 13.12 Edit a Product
+
+- **Endpoint**: `PATCH /products/:id`
+- **Permission**: `PRODUCT_EDIT` (Manager, Admin, Super Admin)
+- **Content-Type**: `application/json`
+- Only the fields that are present change. The internal code, the "has variants" flag and **stock quantities are never changed here** (quantities change through stock adjustments, which keep an audit trail). This permission does not (de)activate or delete products.
+
+```json
+{
+  "name": "iPhone 16 Pro",
+  "description": "256GB",
+  "categoryCode": "ELEC",
+  "brandCode": "APPLE",
+  "supplierCode": "SUP-GLOBAL-01",
+  "unit": "PCS",
+  "sku": "APL-IP16P",
+  "barcode": "8851234567890",
+  "costPrice": 900,
+  "sellingPrice": 1199,
+  "minimumStock": 5,
+  "maximumStock": 200,
+  "variants": [
+    { "code": "IP16P-256-BLK", "name": "256GB Black", "sku": "IP16P-256-BLK", "barcode": null, "attributes": { "color": "Black" }, "costPrice": 900, "sellingPrice": 1199 }
+  ]
+}
+```
+
+`brandCode`, `supplierCode` and `maximumStock` accept `null` to clear the value.
+
+### 13.13 Change a Product Photo
+
+- **Endpoint**: `POST /products/:id/image`
+- **Permission**: `PRODUCT_IMAGE` (Admin, Manager, Super Admin)
+- **Content-Type**: `multipart/form-data`, field `image` (required)
+
+---
+
 ## 14. Product Variants API (`/product-variants`)
 
 ### 14.1 List Product Variants (Paginated)
@@ -1349,7 +1469,7 @@ The core workflow engine handling product creation, variant creation/updating, s
 
 ### 17.2 Direct Stock Adjustments (`/stock-adjustments`)
 
-Direct stock adjustment allows **`ADMIN`** and **`SUPER_ADMIN`** to adjust physical inventory balances immediately without creating a request or requiring multi-step approvals. Regular staff continue to use the approval workflow via `POST /requests` (`STOCK_ADJUSTMENT`).
+Direct stock adjustment allows roles holding **`STOCK_ADJUST`** (`ADMIN`, `SUPER_ADMIN`) to adjust physical inventory balances immediately without creating a request or requiring multi-step approvals. Regular staff continue to use the approval workflow via `POST /requests` (`STOCK_ADJUSTMENT`). Direct **transfers** (`STOCK_TRANSFER`) are also open to `MANAGER` ([17.2.6](#1726-direct-stock-transfer)).
 
 #### 17.2.1 Direct Manual Adjustment
 
@@ -1518,6 +1638,98 @@ Direct stock adjustment allows **`ADMIN`** and **`SUPER_ADMIN`** to adjust physi
 - **Endpoint**: `GET /stock-adjustments/:id`
 - **Access**: Authenticated
 - **Response (`200 OK`)**: Full `StockAdjustment` entity with `product`, `variant`, `warehouse`, and `adjustedBy` relations.
+
+---
+
+#### 17.2.6 Direct Stock Transfer
+
+Moves stock from one warehouse to another **immediately**, without a request. Allowed for roles holding **`STOCK_TRANSFER`** (Super Admin, Admin, Manager). Staff still use the approval workflow (`POST /requests` with `STOCK_TRANSFER`).
+
+- **Endpoint**: `POST /stock-adjustments/transfer`
+- **Permission**: `STOCK_TRANSFER`
+- **Content-Type**: `application/json`
+- The whole batch runs in **one transaction**: if one line fails, nothing is moved.
+- Rules: the quantity must be above 0; source and destination must differ; the source must hold enough stock; the destination must have room (see warehouse `capacity`).
+- Each line is written to `stock_transfers`, so it appears in the history as a **Transfer**.
+
+Request:
+
+```json
+{
+  "transfers": [
+    {
+      "productCode": "PRD-0001",
+      "variantCode": null,
+      "fromWarehouseCode": "WH-PP-MAIN",
+      "toWarehouseCode": "WH-SR-01",
+      "quantity": 20,
+      "reason": "Rebalance Siem Reap"
+    }
+  ]
+}
+```
+
+Response (`201 Created`):
+
+```json
+{
+  "message": "Stock transferred successfully",
+  "count": 1,
+  "data": [
+    {
+      "transferId": "6d1c0a4e-...",
+      "productCode": "PRD-0001",
+      "variantCode": null,
+      "fromWarehouseCode": "WH-PP-MAIN",
+      "toWarehouseCode": "WH-SR-01",
+      "quantity": 20
+    }
+  ]
+}
+```
+
+---
+
+#### 17.2.7 Stock Movement History
+
+One timeline of every movement: Stock In, Stock Out, Transfer and Adjustment (direct changes and approved requests).
+
+| Endpoint | Permission | Description |
+| :--- | :--- | :--- |
+| `GET /stock-adjustments/history` | `ADJUSTMENT_VIEW` | Everyone's movements |
+| `GET /stock-adjustments/history/mine` | `REQUEST_CREATE` | Only the caller's own movements (what they did and the requests they made) |
+
+Query: `?kind=IN|OUT|TRANSFER|ADJUSTMENT&productId=<uuid>&page=1&limit=20`
+
+Response (`200 OK`):
+
+```json
+{
+  "data": [
+    {
+      "id": "6d1c0a4e-...",
+      "kind": "TRANSFER",
+      "at": "2026-10-20T08:59:04.123Z",
+      "productId": "0f89d6c8-...",
+      "productCode": "PRD-0001",
+      "productName": "iPhone 16 Pro",
+      "variantName": null,
+      "fromWarehouse": "WH-PP-MAIN",
+      "toWarehouse": "WH-SR-01",
+      "quantity": 20,
+      "reason": "Rebalance Siem Reap",
+      "byStaff": "Dara Meng",
+      "requestNo": null
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "limit": 20,
+  "hasNextPage": false
+}
+```
+
+`requestNo` is filled only when the movement came from an approved request.
 
 ---
 
@@ -2544,3 +2756,177 @@ GET /barcodes/lookup/8851234567890
 2. **Real-time Dynamic QR Synchronization**:
    - QR codes and barcodes are computed on-demand from the product / variant database state. Whenever product details, prices, or attributes are updated, all barcode/QR streams and printable labels immediately render the updated state without needing storage migration or batch re-generation.
 
+---
+
+## 23. Purchase Orders & Goods Receiving API (`/purchase-orders`)
+
+Buying stock from suppliers. **A purchase order never changes stock by itself.** Stock goes up only when goods are received, for the quantity that actually arrived.
+
+```text
+DRAFT -> SUBMITTED -> APPROVED -> PARTIALLY_RECEIVED -> RECEIVED
+                                        \-> CLOSED (the rest is not coming)
+                 \-> REJECTED -> (edit) -> DRAFT / SUBMITTED
+```
+
+- A **Manager's** order is `SUBMITTED` to the Admin / Super Admin they pick (`approverId`), who approves or rejects it.
+- An **Admin / Super Admin's** own order skips approval and is `APPROVED` as soon as it is submitted.
+- A line can be an existing product (`productCode`, plus `variantCode` when the product has variants) **or a new product** (`newProduct`). A new product is added to the catalogue when it is received, with the received quantity as its stock.
+- The destination warehouse's `capacity` is checked when the order is submitted and when goods are received.
+
+### 23.1 Endpoints Summary
+
+| Method | Endpoint | Permission | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/purchase-orders/import/template` | Public | Excel template for the order's products |
+| `POST` | `/purchase-orders/import` | `PO_CREATE` | Checks an Excel / CSV file row by row. Saves nothing |
+| `GET` | `/purchase-orders/approvers` | `PO_CREATE` | Admins / Super Admins a Manager can send the order to |
+| `GET` | `/purchase-orders/reorder` | `PO_CREATE` | Products at or below minimum stock, with a suggested quantity (`?warehouseCode=` counts that warehouse only) |
+| `GET` | `/purchase-orders/warehouse-check` | `PO_CREATE` | How full a warehouse gets if more units are ordered (`?warehouseCode=&quantity=&excludeId=`) |
+| `GET` | `/purchase-orders/supplier-history/:productId` | `PO_CREATE` | Which suppliers a product was bought from, at what price and how fast |
+| `GET` | `/purchase-orders/supplier-products/:supplierCode` | `PO_VIEW` | Products really bought from one supplier |
+| `POST` | `/purchase-orders` | `PO_CREATE` | Create a draft, or submit straight away with `submit: true` |
+| `GET` | `/purchase-orders` | `PO_VIEW` | List (paginated). `?status=` and `?search=` (PO number or supplier name) |
+| `GET` | `/purchase-orders/:id` | `PO_VIEW` | One order with its lines and receiving details |
+| `PATCH` | `/purchase-orders/:id` | `PO_CREATE` | Edit a draft or rejected order (same body as create) |
+| `POST` | `/purchase-orders/:id/submit` | `PO_CREATE` | Send for approval. Body `{ "approverId": "uuid" }` (required for Manager) |
+| `POST` | `/purchase-orders/:id/approve` | `PO_APPROVE` | Approve |
+| `POST` | `/purchase-orders/:id/reject` | `PO_APPROVE` | Reject. Body `{ "reason": "..." }` |
+| `POST` | `/purchase-orders/:id/receive` | `PO_RECEIVE` | Record one delivery and put the arrived quantities into stock |
+| `POST` | `/purchase-orders/:id/close` | `PO_RECEIVE` | The rest of the order is not coming: close it |
+| `GET` | `/purchase-orders/:id/export-products` | `PO_VIEW` | Received **new** products as an Add Product import file |
+| `POST` | `/purchase-orders/:id/catalog-added` | `PO_CREATE` | The manager added the received new products to the catalogue |
+
+`status` filter values: `DRAFT`, `SUBMITTED`, `APPROVED`, `REJECTED`, `PARTIALLY_RECEIVED`, `RECEIVED`, `CLOSED`.
+
+### 23.2 Create / Edit a Purchase Order
+
+`POST /purchase-orders` and `PATCH /purchase-orders/:id` take the same body:
+
+```json
+{
+  "supplierCode": "SUP-GLOBAL-01",
+  "warehouseCode": "WH-PP-MAIN",
+  "note": "Restock before Khmer New Year",
+  "submit": true,
+  "approverId": "693a56ed-5436-4756-ba32-ff09e691fbfd",
+  "items": [
+    { "productCode": "PRD-0001", "variantCode": null, "quantity": 50, "unitPrice": 880 },
+    {
+      "newProduct": {
+        "name": "Wireless Mouse M1",
+        "categoryCode": "ACC",
+        "brandCode": "LOGI",
+        "unit": "PCS",
+        "sku": "MOUSE-M1"
+      },
+      "quantity": 100,
+      "unitPrice": 6.5
+    }
+  ]
+}
+```
+
+| Field | Notes |
+| :--- | :--- |
+| `supplierCode`, `warehouseCode` | Required. The warehouse is where the goods are delivered |
+| `submit` | `true` = send for approval now; otherwise the order stays a draft |
+| `approverId` | Required when a **Manager** submits. Ignored for Admin / Super Admin (auto-approved) |
+| `items[]` | At least 1. Each has `quantity` (> 0) and `unitPrice` (>= 0) plus either `productCode` (+ `variantCode` if the product has variants) or `newProduct` |
+| `newProduct` | `name` and `categoryCode` required. `brandCode` optional, `unit` defaults to `PCS`, `sku` optional (generated when empty) |
+
+### 23.3 Receive Goods
+
+`POST /purchase-orders/:id/receive` (permission `PO_RECEIVE`, normally Staff):
+
+```json
+{
+  "note": "Truck arrived 9am",
+  "items": [
+    { "itemId": "c1e3...", "quantity": 45, "location": "A-03" }
+  ],
+  "issues": [
+    { "itemId": "c1e3...", "reason": "DAMAGED", "quantity": 5 }
+  ],
+  "rating": 4,
+  "closeAfter": false
+}
+```
+
+| Field | Notes |
+| :--- | :--- |
+| `items[].itemId` | The `purchase_order_items` id (not the product id) |
+| `items[].quantity` | What really arrived in this delivery |
+| `items[].location` | Where the goods were put away (optional) |
+| `issues[]` | Why a line was short: `NOT_ARRIVED`, `DAMAGED` or `WRONG_ITEM`, with a quantity. A record only, never changes stock |
+| `rating` | How the delivery went, `1` (bad) to `5` (great). Optional. Used by `supplier-history` |
+| `closeAfter` | `true` closes the order if it is still not complete (the rest is not coming) |
+
+The order becomes `PARTIALLY_RECEIVED` until every line is complete, then `RECEIVED`. Receiving fails when the warehouse would go over its capacity.
+
+### 23.4 Reorder Suggestions
+
+`GET /purchase-orders/reorder?warehouseCode=WH-PP-MAIN` returns products whose stock is at or below their minimum (stock 0 = out of stock first):
+
+```json
+{
+  "total": 12,
+  "outCount": 3,
+  "lowCount": 9,
+  "items": [
+    {
+      "productId": "0f89d6c8-...",
+      "code": "PRD-0001",
+      "name": "iPhone 16 Pro",
+      "image": null,
+      "unit": "PCS",
+      "hasVariants": false,
+      "stock": 0,
+      "minimumStock": 5,
+      "maximumStock": 200,
+      "status": "OUT",
+      "onOrder": 50,
+      "onOrderPoNumbers": ["PO-00012"],
+      "suggestedQuantity": 150,
+      "covered": false
+    }
+  ]
+}
+```
+
+`onOrder` is what open purchase orders still have not delivered. `covered` is `true` when `suggestedQuantity` is 0 because the open orders already cover the need.
+
+---
+
+## 24. Permission Codes by Role
+
+Codes are `RESOURCE_ACTION`. `SUPER_ADMIN` holds everything (and bypasses the guard). Roles and permissions can be changed by Super Admin at runtime; the table shows the **defaults from the seed**.
+
+| Permission | Purpose | Admin | Manager | Staff |
+| :--- | :--- | :---: | :---: | :---: |
+| `USER_VIEW`, `USER_CREATE`, `USER_ROLE_UPDATE` | Staff accounts | Yes | Yes | - |
+| `ROLE_VIEW` | Read roles | Yes | - | - |
+| `PRODUCT_VIEW` | Read products | Yes | Yes | Yes |
+| `PRODUCT_CREATE` | Create a product directly (others send a request) | Yes | - | - |
+| `PRODUCT_UPDATE` | (De)activate a product | Yes | - | - |
+| `PRODUCT_EDIT` | Edit product details and variants | Yes | Yes | - |
+| `PRODUCT_DELETE` | Delete a product | Yes | - | - |
+| `PRODUCT_IMPORT` | Import products from Excel directly | Yes | Yes | - |
+| `PRODUCT_IMAGE` | Change a product photo | Yes | Yes | - |
+| `CATEGORY_VIEW` / `BRAND_VIEW` / `SUPPLIER_VIEW` / `WAREHOUSE_VIEW` | Read master data | Yes | Yes | Yes |
+| `CATEGORY_MANAGE` / `BRAND_MANAGE` / `SUPPLIER_MANAGE` / `WAREHOUSE_MANAGE` | Create / edit master data | Yes | - | - |
+| `STOCK_VIEW` | Read stock | Yes | Yes | Yes |
+| `STOCK_ADJUST` | Direct stock adjustment | Yes | - | - |
+| `STOCK_TRANSFER` | Direct stock transfer between warehouses | Yes | Yes | - |
+| `ADJUSTMENT_VIEW` | Stock movement history and audit log | Yes | Yes | - |
+| `REQUEST_VIEW`, `REQUEST_CREATE` | See and make requests | Yes | Yes | Yes |
+| `REQUEST_CERTIFY`, `REQUEST_APPROVE` | Certify / approve requests | Yes | Yes | - |
+| `PO_VIEW` | Read purchase orders | Yes | Yes | Yes |
+| `PO_CREATE` | Create / edit / submit purchase orders | Yes | Yes | - |
+| `PO_APPROVE` | Approve / reject purchase orders | Yes | - | - |
+| `PO_RECEIVE` | Receive goods and close orders | - | - | Yes |
+| `REPORT_VIEW` | Read reports | Yes | Yes | - |
+| `REPORT_SEND` | Send reports to Telegram | Yes | - | - |
+
+Roles / permissions / menus management (`ROLE_*`, `PERMISSION_*`, `MENU_*`) is Super Admin only. `PO_RECEIVE` is held by Staff (and Super Admin); an Admin who also needs to receive goods must be granted it.
+
+> After adding a permission code, run the migration that grants it (for example `1792000000000-DirectStockTransfers` for `STOCK_TRANSFER`) or re-run `npm run seed`.

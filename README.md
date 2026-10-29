@@ -15,6 +15,7 @@ The system provides authentication, user and role management, product management
 - Refresh token authentication
 - Password change functionality
 - Temporary password and first-login password change flow
+- Forgot password with a 6-digit email code (10-minute code, 5 attempts, resend limit)
 - Authentication guards
 - Password-change protection
 - Role-Based Access Control (RBAC)
@@ -36,14 +37,16 @@ The system provides authentication, user and role management, product management
 
 - Brand management
 - Category management
-- Supplier management
-- Warehouse management
+- Supplier management (with contact platform, link and country)
+- Warehouse management (with optional capacity limit)
 
 ### 📦 Product Management
 
 - Product management
 - Product variant management
 - Product activation/deactivation
+- Product edit (details and variants) and photo change
+- Excel import preview (checks the file before saving)
 - Product image upload
 - Variant image upload
 - Product SKU and barcode management
@@ -63,10 +66,21 @@ The system provides authentication, user and role management, product management
 - Warehouse stock management
 - Stock-in
 - Stock-out
-- Stock transfer
+- Stock transfer (direct for Super Admin, Admin and Manager; approval workflow for everyone else)
 - Stock adjustment
 - Product and variant stock tracking
 - Stock quantity management
+- Warehouse capacity checks (stock coming in is rejected when a warehouse would overflow)
+- Stock movement history (In, Out, Transfer, Adjustment) with a personal "my history" view
+
+### 🛒 Purchase Orders & Goods Receiving
+
+- Create purchase orders for existing products or brand-new products
+- Approval by an Admin / Super Admin (Admin's own orders are auto-approved)
+- Goods receiving with partial deliveries, shortage reasons (not arrived / damaged / wrong item), delivery rating and close-out
+- Stock goes up only when goods are received, never by the order itself
+- Reorder suggestions for low and out-of-stock products, with what is already on order
+- Supplier history per product (price, speed, rating) and Excel import for order lines
 
 ### ✅ Approval Workflow
 
@@ -176,7 +190,9 @@ The API documentation includes:
 - Warehouses
 - Products
 - Product variants
-- Stock management
+- Stock management (adjustments, direct transfer, history)
+- Purchase orders and goods receiving
+- Permission codes by role
 - Approval workflows
 - Excel import/export
 - Notifications
@@ -254,6 +270,31 @@ JWT_REFRESH_SECRET=your_refresh_secret
 
 ---
 
+## 🗄️ Database Setup
+
+Run the migrations, then the seed (roles, permissions, menus):
+
+```bash
+npm run migration:run
+npm run seed
+```
+
+Other helpers: `npm run migration:show` (what has run) and `npm run migration:revert` (undo the last one).
+
+Recent migrations to be aware of when updating an existing database:
+
+| Migration | What it does |
+| :--- | :--- |
+| `1790600000000-CreatePurchaseOrders` and the later `PurchaseOrder*` / `Po*` migrations | Purchase orders, goods receipts, issues, shortfall / closed status, delivery rating, new-product brand |
+| `1791400000000-CreatePasswordResets` | Forgot-password codes |
+| `1791500000000-AddCapacityToWarehouses` | Optional `capacity` on warehouses |
+| `1791900000000-AddPlatformCountryToSuppliers` | Supplier `platform`, `platform_link`, `country` |
+| `1792000000000-DirectStockTransfers` | `stock_transfers` table and the `STOCK_TRANSFER` permission (Super Admin, Admin, Manager) |
+
+A missing migration shows up as errors such as `column supplier.platform does not exist`.
+
+---
+
 ## ▶️ Running the Application
 
 ### Development
@@ -322,10 +363,15 @@ stock-management-api/
 │   ├── product-variants/
 │   ├── barcodes/
 │   ├── requests/
+│   ├── purchase-orders/
 │   ├── stock/
 │   ├── stock-adjustments/
+│   ├── customer-orders/
+│   ├── dashboard/
 │   ├── reports/
+│   ├── health/
 │   ├── mails/
+│   ├── database/        # migrations/ and seeds/
 │   └── common/
 │
 ├── postman_collection.json
@@ -435,6 +481,18 @@ STOCK_OUT
 STOCK_TRANSFER
 STOCK_ADJUSTMENT
 ```
+
+Super Admin, Admin and Manager can also move stock between warehouses **directly** (`POST /stock-adjustments/transfer`, permission `STOCK_TRANSFER`) without a request.
+
+## 🛒 Purchase Order Flow
+
+```text
+DRAFT -> SUBMITTED -> APPROVED -> PARTIALLY_RECEIVED -> RECEIVED
+                                         \-> CLOSED (rest not coming)
+                  \-> REJECTED -> (edit) -> DRAFT / SUBMITTED
+```
+
+Manager creates and submits, Admin / Super Admin approves, Staff receives the goods. Stock changes only at the receiving step.
 
 ---
 
