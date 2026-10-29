@@ -18,6 +18,10 @@ import { PurchaseOrderItem } from './entities/purchase-order-item.entity';
 import { GoodsReceipt } from './entities/goods-receipt.entity';
 import { GoodsReceiptItem } from './entities/goods-receipt-item.entity';
 import {
+  GoodsReceiptIssue,
+  ReceiptIssueReason,
+} from './entities/goods-receipt-issue.entity';
+import {
   CreatePurchaseOrderDto,
   PurchaseOrderQueryDto,
   ReceivePurchaseOrderDto,
@@ -25,13 +29,21 @@ import {
 import { Supplier } from '../suppliers/entities/supplier.entity';
 import { Warehouse } from '../warehouses/entities/warehouse.entity';
 import { Category } from '../categories/entities/category.entity';
+import { Brand } from '../brands/entities/brand.entity';
 import { Product } from '../products/entities/product.entity';
 import { ProductVariant } from '../product-variants/entities/product-variant.entity';
 import { Stock } from '../stock/entities/stock.entity';
 import { StockAdjustment } from '../stock-adjustments/entities/stock-adjustment.entity';
-import { User } from '../users/entities/user.entity';
+import { User, UserStatus } from '../users/entities/user.entity';
+import { UserRole } from '../users/entities/user-role.entity';
+import { ProductsService } from '../products/products.service';
 import { PurchaseOrdersExcelService } from './purchase-orders-excel.service';
 import { CustomerOrdersService } from '../customer-orders/customer-orders.service';
+import {
+  assertFits,
+  evaluateCapacity,
+  loadWarehouse,
+} from '../warehouses/warehouse-capacity';
 import {
   createPaginatedResult,
   getPaginationOptions,
@@ -45,6 +57,7 @@ type ResolvedLine = {
   variantId: string | null;
   newProductName: string | null;
   newProductCategoryId: string | null;
+  newProductBrandId: string | null;
   newProductUnit: string | null;
   newProductSku: string | null;
   quantity: number;
@@ -56,10 +69,17 @@ type ResolvedLine = {
  * Purchase orders and goods receiving.
  *
  *   DRAFT -> SUBMITTED -> APPROVED -> PARTIALLY_RECEIVED -> RECEIVED
+ *                                          \-> CLOSED (rest not coming)
  *                    \-> REJECTED -> (edit) -> DRAFT / SUBMITTED
  *
+ * A Manager's order is SUBMITTED to the Admin / Super Admin they pick, who
+ * approves or rejects it. An Admin / Super Admin's own order skips that and
+ * is APPROVED as soon as it is submitted.
+ *
  * A purchase order never touches stock by itself. Stock goes up only when
- * goods are received ([receive]), for the quantity that actually arrived.
+ * goods are received ([receive]), for the quantity that actually arrived. A
+ * new-product line is added to the catalogue at that moment, with the
+ * received quantity as its stock.
  */
 @Injectable()
 export class PurchaseOrdersService {
@@ -68,6 +88,7 @@ export class PurchaseOrdersService {
     private readonly poRepo: Repository<PurchaseOrder>,
     private readonly dataSource: DataSource,
     private readonly excel: PurchaseOrdersExcelService,
+    private readonly products: ProductsService,
     @Optional()
     @Inject(forwardRef(() => CustomerOrdersService))
     private readonly customerOrdersService?: CustomerOrdersService,
@@ -81,26 +102,33 @@ export class PurchaseOrdersService {
         manager,
         dto,
       );
+      if (dto.submit) {
+        await this.assertRoom(
+          manager,
+          warehouse.id,
+          null,
+          lines.reduce((sum, line) => sum + line.quantity, 0),
+        );
+      }
       const poNumber = await this.nextNumber(
         manager,
         'purchase_order_number_seq',
         'PO',
       );
 
-      const po = await manager.save(
-        PurchaseOrder,
-        manager.create(PurchaseOrder, {
-          poNumber,
-          supplierId: supplier.id,
-          warehouseId: warehouse.id,
-          status: dto.submit
-            ? PurchaseOrderStatus.SUBMITTED
-            : PurchaseOrderStatus.DRAFT,
-          note: dto.note?.trim() || null,
-          totalAmount: total,
-          createdById: userId,
-        }),
-      );
+      const draft = manager.create(PurchaseOrder, {
+        poNumber,
+        supplierId: supplier.id,
+        warehouseId: warehouse.id,
+        status: PurchaseOrderStatus.DRAFT,
+        note: dto.note?.trim() || null,
+        totalAmount: total,
+        createdById: userId,
+      });
+      if (dto.submit) {
+        await this.routeForApproval(manager, draft, userId, dto.approverId);
+      }
+      const po = await manager.save(PurchaseOrder, draft);
 
       await manager.save(
         PurchaseOrderItem,
@@ -133,16 +161,26 @@ export class PurchaseOrdersService {
         dto,
       );
 
+      if (dto.submit) {
+        await this.assertRoom(
+          manager,
+          warehouse.id,
+          id,
+          lines.reduce((sum, line) => sum + line.quantity, 0),
+        );
+      }
       po.supplierId = supplier.id;
       po.warehouseId = warehouse.id;
       po.note = dto.note?.trim() || null;
       po.totalAmount = total;
-      po.status = dto.submit
-        ? PurchaseOrderStatus.SUBMITTED
-        : PurchaseOrderStatus.DRAFT;
+      po.status = PurchaseOrderStatus.DRAFT;
       po.rejectionReason = null;
       po.approvedById = null;
       po.approvedAt = null;
+      po.requestedApproverId = null;
+      if (dto.submit) {
+        await this.routeForApproval(manager, po, userId, dto.approverId);
+      }
       await manager.save(PurchaseOrder, po);
 
       await manager.delete(PurchaseOrderItem, { purchaseOrderId: id });
@@ -163,12 +201,7 @@ export class PurchaseOrdersService {
 
   // ------------------------------------------------------------------ import
 
-  /**
-   * Reads an Excel / CSV file and checks every row against the catalogue.
-   * Nothing is saved: the caller gets each row back with either the product
-   * it matched or the reason it did not, then builds the order from the good
-   * rows.
-   */
+  /** Reads an Excel / CSV file and checks every row against the catalogue. */
   async previewImport(file: Express.Multer.File) {
     const parsed = this.excel.parse(file);
     const manager = this.dataSource.manager;
@@ -316,16 +349,15 @@ export class PurchaseOrdersService {
     };
   }
 
-  /**
-   * Excel in the Add Product import format, filled in for the new-product
-   * lines that arrived but are not in the catalogue yet. The manager adds the
-   * missing details (SKU, brand, price, image_url...) and imports it, which
-   * creates the products with the counted quantity as initial stock.
-   */
+  /** Excel in the Add Product import format, filled in for the new-product lines that arrived but are not in the catalogue yet. */
   async pendingProductsFile(id: string) {
     const po = await this.poRepo.findOne({
       where: { id },
-      relations: { warehouse: true, items: { newProductCategory: true } },
+      relations: {
+        warehouse: true,
+        supplier: true,
+        items: { newProductCategory: true, newProductBrand: true },
+      },
     });
     if (!po) throw new NotFoundException('Purchase order not found');
 
@@ -348,6 +380,8 @@ export class PurchaseOrdersService {
         pending.map((item) => ({
           name: item.newProductName ?? '',
           categoryCode: item.newProductCategory?.code ?? '',
+          brandCode: item.newProductBrand?.code ?? null,
+          supplierCode: po.supplier.code,
           unit: item.newProductUnit || 'PCS',
           sku: item.newProductSku,
           warehouseCode: po.warehouse.code,
@@ -366,6 +400,7 @@ export class PurchaseOrdersService {
       this.assertStatus(po, [
         PurchaseOrderStatus.PARTIALLY_RECEIVED,
         PurchaseOrderStatus.RECEIVED,
+        PurchaseOrderStatus.CLOSED,
       ]);
       await manager
         .createQueryBuilder()
@@ -408,7 +443,346 @@ export class PurchaseOrdersService {
 
   // ---------------------------------------------------------------- workflow
 
-  async submit(id: string, userId: string) {
+  /**
+   * Admins / Super Admins a Manager can pick from. Anyone who can approve
+   * purchase orders (PO_APPROVE, or Super Admin), except the caller.
+   */
+  async approvers(userId: string) {
+    const rows: Array<{ id: string }> = await this.dataSource.query(
+      `SELECT DISTINCT u.id
+       FROM users u
+       JOIN user_roles ur ON ur.user_id = u.id
+       JOIN roles r ON r.id = ur.role_id
+       LEFT JOIN role_permissions rp ON rp.role_id = r.id
+       LEFT JOIN permissions p ON p.id = rp.permission_id
+       WHERE u.status = 'ACTIVE'
+         AND u.id <> $1
+         AND (r.name = 'SUPER_ADMIN' OR p.name = 'PO_APPROVE')`,
+      [userId],
+    );
+    if (rows.length === 0) return [];
+
+    const users = await this.dataSource.manager.find(User, {
+      where: { id: In(rows.map((r) => r.id)) },
+      relations: { profile: true, userRoles: { role: true } },
+    });
+    return users
+      .map((u) => ({
+        ...this.person(u)!,
+        roles: u.userRoles.map((ur) => ur.role.name),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  // ----------------------------------------------------------------- reorder
+
+  /** Products whose stock is at or below their minimum (stock 0 = out of stock), out of stock first. */
+  async reorderList(warehouseCode?: string) {
+    const params: unknown[] = [];
+    let join = 'LEFT JOIN stocks s ON s.product_id = p.id';
+    const code = warehouseCode?.trim().toUpperCase();
+    if (code) {
+      params.push(code);
+      join +=
+        ' AND s.warehouse_id = (SELECT w.id FROM warehouses w WHERE w.code = $1)';
+    }
+
+    const rows: Array<{
+      id: string;
+      code: string;
+      name: string;
+      image: string | null;
+      unit: string;
+      hasVariants: boolean;
+      minimumStock: string | null;
+      maximumStock: string | null;
+      stock: string;
+    }> = await this.dataSource.query(
+      `SELECT p.id, p.code, p.name, p.image, p.unit,
+              p.has_variants AS "hasVariants",
+              p.minimum_stock AS "minimumStock",
+              p.maximum_stock AS "maximumStock",
+              COALESCE(SUM(s.quantity), 0) AS stock
+       FROM products p
+       ${join}
+       WHERE p.is_active = true
+       GROUP BY p.id
+       HAVING COALESCE(SUM(s.quantity), 0) <= COALESCE(p.minimum_stock, 0)
+       ORDER BY COALESCE(SUM(s.quantity), 0) ASC, p.name ASC
+       LIMIT 300`,
+      params,
+    );
+
+    // Already on order: open purchase orders, quantity not received yet.
+    const onOrder = new Map<string, { quantity: number; poNumbers: Set<string> }>();
+    if (rows.length > 0) {
+      const open: Array<{ productId: string; poNumber: string; remaining: string }> =
+        await this.dataSource.query(
+          `SELECT poi.product_id AS "productId", po.po_number AS "poNumber",
+                  (poi.quantity - poi.received_quantity) AS remaining
+           FROM purchase_order_items poi
+           JOIN purchase_orders po ON po.id = poi.purchase_order_id
+           WHERE poi.product_id = ANY($1::uuid[])
+             AND po.status IN ('SUBMITTED', 'APPROVED', 'PARTIALLY_RECEIVED')
+             AND poi.quantity > poi.received_quantity`,
+          [rows.map((r) => r.id)],
+        );
+      for (const line of open) {
+        const entry = onOrder.get(line.productId) ?? {
+          quantity: 0,
+          poNumbers: new Set<string>(),
+        };
+        entry.quantity = r3(entry.quantity + Number(line.remaining));
+        entry.poNumbers.add(line.poNumber);
+        onOrder.set(line.productId, entry);
+      }
+    }
+
+    const items = rows.map((r) => {
+      const stock = Number(r.stock);
+      const minimum = Number(r.minimumStock ?? 0);
+      const maximum = r.maximumStock === null ? null : Number(r.maximumStock);
+      const incoming = onOrder.get(r.id);
+      const ordered = incoming?.quantity ?? 0;
+
+      // Bring it up to the maximum; without one, to twice the minimum.
+      const target = Math.max(maximum ?? (minimum > 0 ? minimum * 2 : 1), 1);
+      const suggested = Math.max(Math.ceil(target - stock - ordered), 0);
+
+      return {
+        productId: r.id,
+        code: r.code,
+        name: r.name,
+        image: r.image,
+        unit: r.unit,
+        hasVariants: r.hasVariants,
+        stock: r3(stock),
+        minimumStock: minimum,
+        maximumStock: maximum,
+        status: stock <= 0 ? 'OUT' : 'LOW',
+        onOrder: ordered,
+        onOrderPoNumbers: [...(incoming?.poNumbers ?? [])],
+        suggestedQuantity: suggested,
+        // Enough is already on its way.
+        covered: suggested === 0,
+      };
+    });
+
+    return {
+      total: items.length,
+      outCount: items.filter((i) => i.status === 'OUT').length,
+      lowCount: items.filter((i) => i.status === 'LOW').length,
+      items,
+    };
+  }
+
+  /**
+   * Every supplier this product was bought from (approved purchase orders),
+   * with price and delivery speed, so the manager can pick who to order from.
+   * The product's default supplier is listed too, even with no history yet.
+   */
+  async supplierHistory(productId: string) {
+    const manager = this.dataSource.manager;
+    const product = await manager.findOne(Product, { where: { id: productId } });
+    if (!product) throw new NotFoundException('Product not found');
+
+    const rows: Array<{
+      supplierId: string;
+      supplierCode: string;
+      supplierName: string;
+      poId: string;
+      poNumber: string;
+      createdAt: Date;
+      approvedAt: Date | null;
+      firstReceiptAt: Date | null;
+      unitPrice: string;
+      quantity: string;
+      receivedQuantity: string;
+      status: string;
+    }> = await this.dataSource.query(
+      `SELECT sup.id AS "supplierId", sup.code AS "supplierCode", sup.name AS "supplierName",
+              po.id AS "poId", po.po_number AS "poNumber",
+              po.created_at AS "createdAt", po.approved_at AS "approvedAt",
+              (SELECT MIN(gr.created_at) FROM goods_receipts gr
+                WHERE gr.purchase_order_id = po.id) AS "firstReceiptAt",
+              poi.unit_price AS "unitPrice", poi.quantity AS quantity,
+              poi.received_quantity AS "receivedQuantity", po.status AS status
+       FROM purchase_order_items poi
+       JOIN purchase_orders po ON po.id = poi.purchase_order_id
+       JOIN suppliers sup ON sup.id = po.supplier_id
+       WHERE poi.product_id = $1
+         AND po.status IN ('APPROVED', 'PARTIALLY_RECEIVED', 'RECEIVED', 'CLOSED')
+       ORDER BY po.created_at ASC`,
+      [productId],
+    );
+
+    // Units that arrived broken / not as ordered, per supplier.
+    const issueRows: Array<{ supplierId: string; reason: string; quantity: string }> =
+      await this.dataSource.query(
+        `SELECT po.supplier_id AS "supplierId", gi.reason AS reason,
+                SUM(gi.quantity) AS quantity
+         FROM goods_receipt_issues gi
+         JOIN purchase_order_items poi ON poi.id = gi.purchase_order_item_id
+         JOIN goods_receipts gr ON gr.id = gi.goods_receipt_id
+         JOIN purchase_orders po ON po.id = gr.purchase_order_id
+         WHERE poi.product_id = $1 AND gi.reason IN ('DAMAGED', 'WRONG_ITEM')
+         GROUP BY po.supplier_id, gi.reason`,
+        [productId],
+      );
+    // Average delivery rating per supplier (orders that include this product).
+    const ratingRows: Array<{ supplierId: string; avg: string; count: string }> =
+      await this.dataSource.query(
+        `SELECT po.supplier_id AS "supplierId", AVG(gr.rating) AS avg,
+                COUNT(gr.rating) AS count
+         FROM goods_receipts gr
+         JOIN purchase_orders po ON po.id = gr.purchase_order_id
+         WHERE gr.rating IS NOT NULL
+           AND EXISTS (SELECT 1 FROM purchase_order_items poi
+                        WHERE poi.purchase_order_id = po.id AND poi.product_id = $1)
+         GROUP BY po.supplier_id`,
+        [productId],
+      );
+    const ratingOf = (supplierId: string) => {
+      const row = ratingRows.find((r) => r.supplierId === supplierId);
+      return {
+        averageRating: row ? Math.round(Number(row.avg) * 10) / 10 : null,
+        ratingCount: row ? Number(row.count) : 0,
+      };
+    };
+    const issueQty = (supplierId: string, reason: string) =>
+      r3(
+        issueRows
+          .filter((r) => r.supplierId === supplierId && r.reason === reason)
+          .reduce((sum, r) => sum + Number(r.quantity), 0),
+      );
+
+    type Agg = {
+      supplierId: string;
+      code: string;
+      name: string;
+      orders: Set<string>;
+      lines: Array<{ price: number; quantity: number; at: Date }>;
+      received: number;
+      // Only finished orders (received / closed) tell how complete deliveries are.
+      finishedOrdered: number;
+      finishedReceived: number;
+      leadDays: Map<string, number>;
+    };
+    const bySupplier = new Map<string, Agg>();
+    for (const r of rows) {
+      const agg: Agg = bySupplier.get(r.supplierId) ?? {
+        supplierId: r.supplierId,
+        code: r.supplierCode,
+        name: r.supplierName,
+        orders: new Set<string>(),
+        lines: [],
+        received: 0,
+        finishedOrdered: 0,
+        finishedReceived: 0,
+        leadDays: new Map<string, number>(),
+      };
+      agg.orders.add(r.poId);
+      agg.lines.push({
+        price: Number(r.unitPrice),
+        quantity: Number(r.quantity),
+        at: new Date(r.createdAt),
+      });
+      agg.received += Number(r.receivedQuantity);
+      if (r.status === 'RECEIVED' || r.status === 'CLOSED') {
+        agg.finishedOrdered += Number(r.quantity);
+        agg.finishedReceived += Number(r.receivedQuantity);
+      }
+      if (r.firstReceiptAt && !agg.leadDays.has(r.poId)) {
+        const from = new Date(r.approvedAt ?? r.createdAt).getTime();
+        const days = (new Date(r.firstReceiptAt).getTime() - from) / 86_400_000;
+        agg.leadDays.set(r.poId, Math.max(days, 0));
+      }
+      bySupplier.set(r.supplierId, agg);
+    }
+
+    const suppliers = [...bySupplier.values()].map((a) => {
+      const prices = a.lines.map((l) => l.price);
+      const totalQty = a.lines.reduce((sum, l) => sum + l.quantity, 0);
+      const weighted =
+        totalQty > 0
+          ? a.lines.reduce((sum, l) => sum + l.price * l.quantity, 0) / totalQty
+          : prices.reduce((sum, p) => sum + p, 0) / prices.length;
+      const last = a.lines.reduce((x, y) => (y.at >= x.at ? y : x));
+      const leads = [...a.leadDays.values()];
+      return {
+        supplierId: a.supplierId,
+        code: a.code,
+        name: a.name,
+        isDefault: a.supplierId === product.supplierId,
+        timesOrdered: a.orders.size,
+        totalQuantity: r3(totalQty),
+        totalReceived: r3(a.received),
+        // % of the ordered quantity that arrived, over finished orders (null = none finished).
+        fillRate:
+          a.finishedOrdered > 0
+            ? Math.round((a.finishedReceived / a.finishedOrdered) * 1000) / 10
+            : (null as number | null),
+        damagedQuantity: issueQty(a.supplierId, 'DAMAGED'),
+        wrongQuantity: issueQty(a.supplierId, 'WRONG_ITEM'),
+        ...ratingOf(a.supplierId),
+        lastPrice: r2(last.price),
+        lowestPrice: r2(Math.min(...prices)),
+        averagePrice: r2(weighted),
+        lastOrderedAt: last.at as Date | null,
+        // Days from approval to the first delivery (only orders that arrived).
+        averageLeadDays: leads.length
+          ? Math.round((leads.reduce((s, d) => s + d, 0) / leads.length) * 10) / 10
+          : null,
+      };
+    });
+
+    // The product's usual supplier is always an option, with or without history.
+    if (product.supplierId && !bySupplier.has(product.supplierId)) {
+      const sup = await manager.findOne(Supplier, {
+        where: { id: product.supplierId, isActive: true },
+      });
+      if (sup) {
+        suppliers.push({
+          supplierId: sup.id,
+          code: sup.code,
+          name: sup.name,
+          isDefault: true,
+          timesOrdered: 0,
+          totalQuantity: 0,
+          totalReceived: 0,
+          damagedQuantity: 0,
+          wrongQuantity: 0,
+          fillRate: null as number | null,
+          averageRating: null as number | null,
+          ratingCount: 0,
+          lastPrice: r2(Number(product.costPrice ?? 0)),
+          lowestPrice: r2(Number(product.costPrice ?? 0)),
+          averagePrice: r2(Number(product.costPrice ?? 0)),
+          lastOrderedAt: null,
+          averageLeadDays: null,
+        });
+      }
+    }
+
+    // Most experience first, then the cheapest.
+    suppliers.sort(
+      (a, b) => b.timesOrdered - a.timesOrdered || a.lastPrice - b.lastPrice,
+    );
+
+    return {
+      product: {
+        id: product.id,
+        code: product.code,
+        name: product.name,
+        unit: product.unit,
+        image: product.image,
+        costPrice: Number(product.costPrice ?? 0),
+      },
+      suppliers,
+    };
+  }
+
+  async submit(id: string, userId: string, approverId?: string) {
     await this.dataSource.transaction(async (manager) => {
       const po = await this.lock(manager, id);
       this.assertCreator(po, userId);
@@ -416,10 +790,16 @@ export class PurchaseOrdersService {
         PurchaseOrderStatus.DRAFT,
         PurchaseOrderStatus.REJECTED,
       ]);
-      po.status = PurchaseOrderStatus.SUBMITTED;
+      await this.assertRoom(
+        manager,
+        po.warehouseId,
+        id,
+        await this.outstanding(manager, id),
+      );
       po.rejectionReason = null;
       po.approvedById = null;
       po.approvedAt = null;
+      await this.routeForApproval(manager, po, userId, approverId);
       await manager.save(PurchaseOrder, po);
     });
     return this.findOne(id);
@@ -430,6 +810,14 @@ export class PurchaseOrdersService {
       const po = await this.lock(manager, id);
       this.assertStatus(po, [PurchaseOrderStatus.SUBMITTED]);
       this.assertNotCreator(po, userId);
+      await this.assertRequestedApprover(manager, po, userId);
+      // Stock may have grown since it was submitted: check again.
+      await this.assertRoom(
+        manager,
+        po.warehouseId,
+        id,
+        await this.outstanding(manager, id),
+      );
       po.status = PurchaseOrderStatus.APPROVED;
       po.approvedById = userId;
       po.approvedAt = new Date();
@@ -444,6 +832,7 @@ export class PurchaseOrdersService {
       const po = await this.lock(manager, id);
       this.assertStatus(po, [PurchaseOrderStatus.SUBMITTED]);
       this.assertNotCreator(po, userId);
+      await this.assertRequestedApprover(manager, po, userId);
       po.status = PurchaseOrderStatus.REJECTED;
       po.approvedById = userId; // who made the decision
       po.approvedAt = new Date();
@@ -455,12 +844,7 @@ export class PurchaseOrdersService {
 
   // --------------------------------------------------------------- receiving
 
-  /**
-   * Goods receiving: records one delivery and puts the quantities that
-   * arrived into the purchase order's warehouse. Everything happens in one
-   * transaction, so a receipt never exists without its stock (or the
-   * reverse). A PO can be received in several deliveries.
-   */
+  /** Goods receiving: records one delivery and puts the quantities that arrived into the purchase order's warehouse. */
   async receive(id: string, dto: ReceivePurchaseOrderDto, userId: string) {
     await this.dataSource.transaction(async (manager) => {
       const po = await this.lock(manager, id);
@@ -497,6 +881,39 @@ export class PurchaseOrdersService {
         }
       }
 
+      // What was short and why: a record only. Each is within what is still
+      // to come on the line, after what arrives now.
+      const issues = dto.issues ?? [];
+      for (const issue of issues) {
+        const item = byId.get(issue.itemId);
+        if (!item) {
+          throw new BadRequestException(
+            'An item does not belong to this purchase order',
+          );
+        }
+        const arrivingNow = Number(
+          dto.items.find((l) => l.itemId === issue.itemId)?.quantity ?? 0,
+        );
+        const left = r3(
+          Number(item.quantity) - Number(item.receivedQuantity) - arrivingNow,
+        );
+        if (r3(issue.quantity) > left) {
+          throw new BadRequestException(
+            `Cannot record ${issue.quantity} as short: only ${Math.max(left, 0)} is missing on this item`,
+          );
+        }
+      }
+
+      // What arrives must fit: stock now + this delivery, within the limit.
+      // (Other open orders are not counted: this one is the goods at the door.)
+      const arriving = r3(
+        dto.items.reduce((sum, line) => sum + Number(line.quantity), 0),
+      );
+      const load = await loadWarehouse(manager, po.warehouseId, id);
+      if (load && load.capacity !== null) {
+        assertFits({ ...load, incoming: 0 }, arriving);
+      }
+
       const receiptNumber = await this.nextNumber(
         manager,
         'goods_receipt_number_seq',
@@ -509,8 +926,21 @@ export class PurchaseOrdersService {
           purchaseOrderId: id,
           receivedById: userId,
           note: dto.note?.trim() || null,
+          rating: dto.rating ?? null,
         }),
       );
+
+      for (const issue of issues) {
+        await manager.save(
+          GoodsReceiptIssue,
+          manager.create(GoodsReceiptIssue, {
+            goodsReceiptId: receipt.id,
+            purchaseOrderItemId: issue.itemId,
+            reason: issue.reason as ReceiptIssueReason,
+            quantity: r3(issue.quantity),
+          }),
+        );
+      }
 
       for (const line of dto.items) {
         const item = byId.get(line.itemId)!;
@@ -525,10 +955,61 @@ export class PurchaseOrdersService {
           }),
         );
 
-        // A new-product line is not in the catalogue yet, so it cannot go into
-        // stock. The count is only recorded; the manager adds the product
-        // (Add Product import, with this quantity as initial stock) afterwards.
+        // A new-product line is not in the catalogue yet: the product is
+        // created now, with the quantity that arrived as its stock. Later
+        // deliveries of the same line go into that product's stock as usual.
         if (!item.productId) {
+          const category = item.newProductCategoryId
+            ? await manager.findOne(Category, {
+                where: { id: item.newProductCategoryId },
+              })
+            : null;
+          const warehouse = await manager.findOne(Warehouse, {
+            where: { id: po.warehouseId },
+          });
+          const brand = item.newProductBrandId
+            ? await manager.findOne(Brand, {
+                where: { id: item.newProductBrandId },
+              })
+            : null;
+          // The order's supplier becomes the new product's usual supplier.
+          const supplier = await manager.findOne(Supplier, {
+            where: { id: po.supplierId },
+          });
+          if (!category || !warehouse) {
+            throw new BadRequestException(
+              `"${item.newProductName}": category or warehouse no longer exists`,
+            );
+          }
+
+          const created = await this.products.createForPurchaseOrder(manager, {
+            name: item.newProductName ?? '',
+            categoryCode: category.code,
+            brandCode: brand?.code ?? null,
+            supplierCode: supplier?.code ?? null,
+            unit: item.newProductUnit || 'PCS',
+            sku: item.newProductSku,
+            costPrice: Number(item.unitPrice),
+            warehouseCode: warehouse.code,
+            quantity,
+            location: line.location?.trim() || null,
+          });
+
+          await manager.save(
+            StockAdjustment,
+            manager.create(StockAdjustment, {
+              requestId: null,
+              adjustedById: userId,
+              productId: created.id,
+              variantId: null,
+              warehouseId: po.warehouseId,
+              adjustmentType: 'INCREASE',
+              quantity,
+              reason: `Goods receipt ${receiptNumber} (${po.poNumber}) - new product`,
+            }),
+          );
+
+          item.productId = created.id;
           item.receivedQuantity = r3(Number(item.receivedQuantity) + quantity);
           await manager.save(PurchaseOrderItem, item);
           continue;
@@ -546,6 +1027,8 @@ export class PurchaseOrdersService {
         });
         if (stock) {
           stock.quantity = r3(Number(stock.quantity) + quantity);
+          // Where it was put away this time (optional): keep the old place otherwise.
+          if (line.location?.trim()) stock.location = line.location.trim();
           await manager.save(Stock, stock);
         } else {
           await manager.save(
@@ -555,7 +1038,7 @@ export class PurchaseOrdersService {
               variantId: item.variantId,
               warehouseId: po.warehouseId,
               quantity,
-              location: null,
+              location: line.location?.trim() || null,
             }),
           );
         }
@@ -595,11 +1078,66 @@ export class PurchaseOrdersService {
       );
       po.status = complete
         ? PurchaseOrderStatus.RECEIVED
-        : PurchaseOrderStatus.PARTIALLY_RECEIVED;
+        : dto.closeAfter
+          ? PurchaseOrderStatus.CLOSED
+          : PurchaseOrderStatus.PARTIALLY_RECEIVED;
       await manager.save(PurchaseOrder, po);
     });
 
     return this.findOne(id);
+  }
+
+  /**
+   * Closes an order whose rest is not coming (or that was never delivered).
+   * Stock already received stays; what is still to come no longer counts as
+   * "on order" for the warehouse.
+   */
+  async close(id: string) {
+    await this.dataSource.transaction(async (manager) => {
+      const po = await this.lock(manager, id);
+      this.assertStatus(po, [
+        PurchaseOrderStatus.APPROVED,
+        PurchaseOrderStatus.PARTIALLY_RECEIVED,
+      ]);
+      po.status = PurchaseOrderStatus.CLOSED;
+      await manager.save(PurchaseOrder, po);
+    });
+    return this.findOne(id);
+  }
+
+  /**
+   * What was really bought from a supplier: one row per product on its
+   * approved / received orders, with how often and the latest price.
+   */
+  async supplierProducts(supplierCode: string) {
+    const rows: Array<{
+      productId: string;
+      orders: string;
+      quantity: string;
+      lastOrderedAt: Date;
+      lastPrice: string;
+    }> = await this.dataSource.query(
+      `SELECT poi.product_id AS "productId",
+              COUNT(DISTINCT po.id) AS orders,
+              SUM(poi.quantity) AS quantity,
+              MAX(po.created_at) AS "lastOrderedAt",
+              (ARRAY_AGG(poi.unit_price ORDER BY po.created_at DESC))[1] AS "lastPrice"
+         FROM purchase_order_items poi
+         JOIN purchase_orders po ON po.id = poi.purchase_order_id
+         JOIN suppliers s ON s.id = po.supplier_id
+        WHERE s.code = $1
+          AND poi.product_id IS NOT NULL
+          AND po.status IN ('APPROVED', 'PARTIALLY_RECEIVED', 'RECEIVED', 'CLOSED')
+        GROUP BY poi.product_id`,
+      [supplierCode.trim()],
+    );
+    return rows.map((r) => ({
+      productId: r.productId,
+      orders: Number(r.orders),
+      quantity: Number(r.quantity),
+      lastOrderedAt: r.lastOrderedAt,
+      lastPrice: Number(r.lastPrice),
+    }));
   }
 
   // ------------------------------------------------------------------- reads
@@ -613,7 +1151,9 @@ export class PurchaseOrdersService {
       .leftJoinAndSelect('po.supplier', 'supplier')
       .leftJoinAndSelect('po.warehouse', 'warehouse')
       .leftJoinAndSelect('po.createdBy', 'createdBy')
-      .leftJoinAndSelect('createdBy.profile', 'createdByProfile');
+      .leftJoinAndSelect('createdBy.profile', 'createdByProfile')
+      .leftJoinAndSelect('po.requestedApprover', 'approver')
+      .leftJoinAndSelect('approver.profile', 'approverProfile');
 
     if (query.status) {
       qb.andWhere('po.status = :status', { status: query.status });
@@ -666,6 +1206,7 @@ export class PurchaseOrdersService {
       supplier: { code: po.supplier.code, name: po.supplier.name },
       warehouse: { code: po.warehouse.code, name: po.warehouse.name },
       createdBy: this.person(po.createdBy),
+      approver: this.person(po.requestedApprover),
       createdAt: po.createdAt,
     }));
 
@@ -680,10 +1221,17 @@ export class PurchaseOrdersService {
         warehouse: true,
         createdBy: { profile: true },
         approvedBy: { profile: true },
-        items: { product: true, variant: true, newProductCategory: true },
+        requestedApprover: { profile: true },
+        items: {
+          product: true,
+          variant: true,
+          newProductCategory: true,
+          newProductBrand: true,
+        },
         receipts: {
           receivedBy: { profile: true },
           items: { purchaseOrderItem: { product: true, variant: true } },
+          issues: { purchaseOrderItem: { product: true, variant: true } },
         },
       },
     });
@@ -708,6 +1256,8 @@ export class PurchaseOrdersService {
               name: item.newProductName,
               categoryCode: item.newProductCategory?.code ?? null,
               categoryName: item.newProductCategory?.name ?? null,
+              brandCode: item.newProductBrand?.code ?? null,
+              brandName: item.newProductBrand?.name ?? null,
               unit: item.newProductUnit,
               sku: item.newProductSku,
             },
@@ -732,6 +1282,7 @@ export class PurchaseOrdersService {
         id: receipt.id,
         receiptNumber: receipt.receiptNumber,
         note: receipt.note,
+        rating: receipt.rating,
         receivedBy: this.person(receipt.receivedBy),
         createdAt: receipt.createdAt,
         items: receipt.items.map((line) => ({
@@ -742,7 +1293,40 @@ export class PurchaseOrdersService {
           variantName: line.purchaseOrderItem.variant?.name ?? null,
           quantity: Number(line.quantity),
         })),
+        // What was short in this delivery, and why.
+        issues: (receipt.issues ?? []).map((issue) => ({
+          productName:
+            issue.purchaseOrderItem.product?.name ??
+            issue.purchaseOrderItem.newProductName ??
+            '',
+          variantName: issue.purchaseOrderItem.variant?.name ?? null,
+          reason: issue.reason,
+          quantity: Number(issue.quantity),
+        })),
       }));
+
+    // How full the warehouse gets with this order (only while it is still to come).
+    const stillToCome = [
+      PurchaseOrderStatus.DRAFT,
+      PurchaseOrderStatus.REJECTED,
+      PurchaseOrderStatus.SUBMITTED,
+      PurchaseOrderStatus.APPROVED,
+      PurchaseOrderStatus.PARTIALLY_RECEIVED,
+    ].includes(po.status);
+    let capacityInfo: ReturnType<typeof evaluateCapacity> | null = null;
+    if (stillToCome) {
+      const load = await loadWarehouse(
+        this.dataSource.manager,
+        po.warehouseId,
+        po.id,
+      );
+      if (load) {
+        capacityInfo = evaluateCapacity(
+          load,
+          r3(items.reduce((sum, i) => sum + i.remainingQuantity, 0)),
+        );
+      }
+    }
 
     return {
       id: po.id,
@@ -751,9 +1335,12 @@ export class PurchaseOrdersService {
       note: po.note,
       totalAmount: Number(po.totalAmount),
       rejectionReason: po.rejectionReason,
+      capacityInfo,
       supplier: { code: po.supplier.code, name: po.supplier.name },
       warehouse: { code: po.warehouse.code, name: po.warehouse.name },
       createdBy: this.person(po.createdBy),
+      // Who the order was sent to for approval (null = approved automatically).
+      approver: this.person(po.requestedApprover),
       decidedBy: po.approvedBy ? this.person(po.approvedBy) : null,
       decidedAt: po.approvedAt,
       createdAt: po.createdAt,
@@ -813,6 +1400,17 @@ export class PurchaseOrdersService {
           throw new NotFoundException(`${label}: category not found or inactive`);
         }
 
+        let brandId: string | null = null;
+        if (np.brandCode?.trim()) {
+          const brand = await manager.findOne(Brand, {
+            where: { code: np.brandCode.trim().toUpperCase(), isActive: true },
+          });
+          if (!brand) {
+            throw new NotFoundException(`${label}: brand not found or inactive`);
+          }
+          brandId = brand.id;
+        }
+
         const sku = np.sku?.trim() || null;
         if (sku) {
           const taken =
@@ -835,6 +1433,7 @@ export class PurchaseOrdersService {
           variantId: null,
           newProductName: name,
           newProductCategoryId: category.id,
+          newProductBrandId: brandId,
           newProductUnit: np.unit?.trim() || 'PCS',
           newProductSku: sku,
           quantity,
@@ -878,6 +1477,7 @@ export class PurchaseOrdersService {
         variantId: variant?.id ?? null,
         newProductName: null,
         newProductCategoryId: null,
+        newProductBrandId: null,
         newProductUnit: null,
         newProductSku: null,
         quantity,
@@ -888,6 +1488,53 @@ export class PurchaseOrdersService {
 
     const total = r2(lines.reduce((sum, line) => sum + line.lineTotal, 0));
     return { supplier, warehouse, lines, total };
+  }
+
+  /** Units of this order that have not arrived yet. */
+  private async outstanding(manager: EntityManager, poId: string) {
+    const [row]: Array<{ n: string }> = await manager.query(
+      `SELECT COALESCE(SUM(GREATEST(quantity - received_quantity, 0)), 0) AS n
+         FROM purchase_order_items WHERE purchase_order_id = $1`,
+      [poId],
+    );
+    return Number(row?.n ?? 0);
+  }
+
+  /** Rejects the order when the warehouse could not hold it (with what is already on order). */
+  private async assertRoom(
+    manager: EntityManager,
+    warehouseId: string,
+    poId: string | null,
+    quantity: number,
+  ) {
+    const load = await loadWarehouse(manager, warehouseId, poId);
+    if (load && load.capacity !== null) assertFits(load, r3(quantity));
+  }
+
+  /**
+   * Live check for the order form: how full [warehouseCode] gets if
+   * [quantity] more units are ordered. [excludeId] is the order being edited.
+   */
+  async capacityPreview(
+    warehouseCode: string,
+    quantity: number,
+    excludeId?: string,
+  ) {
+    const warehouse = await this.dataSource.manager.findOne(Warehouse, {
+      where: { code: warehouseCode.trim().toUpperCase(), isActive: true },
+    });
+    if (!warehouse) {
+      throw new NotFoundException(`Warehouse "${warehouseCode}" not found`);
+    }
+    const load = await loadWarehouse(
+      this.dataSource.manager,
+      warehouse.id,
+      excludeId ?? null,
+    );
+    return {
+      warehouse: { code: warehouse.code, name: warehouse.name },
+      ...evaluateCapacity(load!, r3(Number.isFinite(quantity) ? quantity : 0)),
+    };
   }
 
   private async nextNumber(
@@ -909,6 +1556,88 @@ export class PurchaseOrdersService {
     });
     if (!po) throw new NotFoundException('Purchase order not found');
     return po;
+  }
+
+  /** What the user may do: Super Admin, or a role holding PO_APPROVE. */
+  private async accessOf(manager: EntityManager, userId: string) {
+    const userRoles = await manager.find(UserRole, {
+      where: { userId },
+      relations: { role: { rolePermissions: { permission: true } } },
+    });
+    const isSuperAdmin = userRoles.some((ur) => ur.role.name === 'SUPER_ADMIN');
+    const permissions = new Set<string>();
+    for (const ur of userRoles) {
+      for (const rp of ur.role.rolePermissions) {
+        permissions.add(rp.permission.name);
+      }
+    }
+    return {
+      isSuperAdmin,
+      canApprove: isSuperAdmin || permissions.has('PO_APPROVE'),
+    };
+  }
+
+  /**
+   * Sends the order for approval. Admin / Super Admin: approved on the spot,
+   * no request. Anyone else (Manager): must name an Admin / Super Admin, who
+   * then approves or rejects it.
+   */
+  private async routeForApproval(
+    manager: EntityManager,
+    po: PurchaseOrder,
+    userId: string,
+    approverId?: string,
+  ) {
+    const me = await this.accessOf(manager, userId);
+    if (me.canApprove) {
+      po.status = PurchaseOrderStatus.APPROVED;
+      po.requestedApproverId = null;
+      po.approvedById = userId;
+      po.approvedAt = new Date();
+      po.rejectionReason = null;
+      return;
+    }
+
+    if (!approverId) {
+      throw new BadRequestException(
+        'Choose who should approve this purchase order',
+      );
+    }
+    if (approverId === userId) {
+      throw new BadRequestException(
+        'You cannot send a purchase order to yourself for approval',
+      );
+    }
+    const approver = await manager.findOne(User, {
+      where: { id: approverId, status: UserStatus.ACTIVE },
+    });
+    if (!approver) {
+      throw new NotFoundException('Approver not found or inactive');
+    }
+    if (!(await this.accessOf(manager, approverId)).canApprove) {
+      throw new BadRequestException(
+        'This user is not allowed to approve purchase orders',
+      );
+    }
+
+    po.status = PurchaseOrderStatus.SUBMITTED;
+    po.requestedApproverId = approverId;
+    po.approvedById = null;
+    po.approvedAt = null;
+    po.rejectionReason = null;
+  }
+
+  /** An order sent to one person is decided by that person (or a Super Admin). */
+  private async assertRequestedApprover(
+    manager: EntityManager,
+    po: PurchaseOrder,
+    userId: string,
+  ) {
+    if (!po.requestedApproverId || po.requestedApproverId === userId) return;
+    if ((await this.accessOf(manager, userId)).isSuperAdmin) return;
+    throw new ForbiddenException(
+      'This purchase order was sent to another approver',
+    );
   }
 
   private assertStatus(po: PurchaseOrder, allowed: PurchaseOrderStatus[]) {

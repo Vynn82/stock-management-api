@@ -566,15 +566,7 @@ export class TelegramAuthService {
   // STAFF APPROVAL & SEARCH ACTIONS
   // ========================================================
 
-  /**
-   * Search customers for staff order creation.
-   * Supports:
-   * - Telegram username (e.g. @john or john)
-   * - Telegram User ID (e.g. 123456789)
-   * - Company name
-   * - Contact name
-   * - Phone number
-   */
+  /** Search customers for staff order creation. */
   async searchCustomersForStaff(queryText?: string) {
     if (!queryText || !queryText.trim()) {
       return [];

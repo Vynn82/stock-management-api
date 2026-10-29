@@ -4,11 +4,13 @@ import {
   IsArray,
   IsBoolean,
   IsIn,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
   IsUUID,
   Length,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -24,6 +26,12 @@ export class NewProductDto {
   @IsString()
   @Length(1, 50)
   categoryCode: string;
+
+  /** Optional brand (its code). */
+  @IsOptional()
+  @IsString()
+  @Length(1, 50)
+  brandCode?: string;
 
   /** Defaults to PCS. */
   @IsOptional()
@@ -84,11 +92,25 @@ export class CreatePurchaseOrderDto {
   @IsBoolean()
   submit?: boolean;
 
+  /**
+   * The Admin / Super Admin who should approve it. Required when a Manager
+   * submits; ignored for Admin / Super Admin (their orders are auto-approved).
+   */
+  @IsOptional()
+  @IsUUID()
+  approverId?: string;
+
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => PurchaseOrderItemDto)
   items: PurchaseOrderItemDto[];
+}
+
+export class SubmitPurchaseOrderDto {
+  @IsOptional()
+  @IsUUID()
+  approverId?: string;
 }
 
 export class RejectPurchaseOrderDto {
@@ -105,6 +127,25 @@ export class ReceiveItemDto {
   @IsNumber()
   @Min(0.001)
   quantity: number;
+
+  /** Where the goods were put away in the warehouse (optional). */
+  @IsOptional()
+  @IsString()
+  location?: string;
+}
+
+/** Why a line was short in this delivery (record only: never changes stock). */
+export class ReceiptIssueDto {
+  /** The purchase_order_items id. */
+  @IsUUID()
+  itemId: string;
+
+  @IsIn(['NOT_ARRIVED', 'DAMAGED', 'WRONG_ITEM'])
+  reason: 'NOT_ARRIVED' | 'DAMAGED' | 'WRONG_ITEM';
+
+  @IsNumber()
+  @Min(0.001)
+  quantity: number;
 }
 
 export class ReceivePurchaseOrderDto {
@@ -117,6 +158,25 @@ export class ReceivePurchaseOrderDto {
   @ValidateNested({ each: true })
   @Type(() => ReceiveItemDto)
   items: ReceiveItemDto[];
+
+  /** What was short and why (optional). */
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ReceiptIssueDto)
+  issues?: ReceiptIssueDto[];
+
+  /** How the delivery went, 1 (bad) to 5 (great). Optional. */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  rating?: number;
+
+  /** Close the order if it is still not complete: the rest is not coming. */
+  @IsOptional()
+  @IsBoolean()
+  closeAfter?: boolean;
 }
 
 export class PurchaseOrderQueryDto extends PaginationDto {
@@ -128,6 +188,7 @@ export class PurchaseOrderQueryDto extends PaginationDto {
     'REJECTED',
     'PARTIALLY_RECEIVED',
     'RECEIVED',
+    'CLOSED',
   ])
   status?: string;
 }

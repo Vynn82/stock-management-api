@@ -53,6 +53,17 @@ export class Supplier {
   })
   address: string | null;
 
+  /** How the supplier is reached online: TELEGRAM, WHATSAPP, FACEBOOK... */
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  platform: string | null;
+
+  /** The supplier's link or username on [platform]. */
+  @Column({ name: 'platform_link', type: 'varchar', length: 300, nullable: true })
+  platformLink: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  country: string | null;
+
   @Column({
     name: 'is_active',
     type: 'boolean',

@@ -21,15 +21,13 @@ import {
   PurchaseOrderQueryDto,
   ReceivePurchaseOrderDto,
   RejectPurchaseOrderDto,
+  SubmitPurchaseOrderDto,
 } from './dto/purchase-order.dto';
 import { Public } from '../auth/decorators/public.decorator';
 import { RequirePermission } from '../auth/decorators/permission.decorator';
 import * as authenticatedUserInterface from '../auth/interfaces/authenticated-request.interface';
 
-/**
- * PO_VIEW to read, PO_CREATE to make / edit / submit (Manager),
- * PO_APPROVE to approve / reject (Admin), PO_RECEIVE to receive goods (Staff).
- */
+/** PO_VIEW to read, PO_CREATE to make / edit / submit (Manager, Admin), PO_APPROVE to approve / reject (Admin), PO_RECEIVE to receive goods (Staff). */
 @Controller('purchase-orders')
 export class PurchaseOrdersController {
   constructor(private readonly service: PurchaseOrdersService) {}
@@ -47,6 +45,56 @@ export class PurchaseOrdersController {
       'Content-Length': file.length,
     });
     res.send(file);
+  }
+
+  /** Admins / Super Admins a Manager can send an order to for approval. */
+  @RequirePermission('PO_CREATE')
+  @Get('approvers')
+  approvers(@Req() req: authenticatedUserInterface.AuthenticatedRequest) {
+    return this.service.approvers(req.user.sub);
+  }
+
+  /**
+   * Products at or below their minimum stock (out of stock first), with what
+   * is already on order and a suggested quantity. Optional ?warehouseCode=
+   * counts the stock of that warehouse only.
+   */
+  @RequirePermission('PO_CREATE')
+  @Get('reorder')
+  reorder(@Query('warehouseCode') warehouseCode?: string) {
+    return this.service.reorderList(warehouseCode);
+  }
+
+  /**
+   * How full a warehouse gets if ?quantity= more units are ordered
+   * (?excludeId= leaves out the order being edited).
+   */
+  @RequirePermission('PO_CREATE')
+  @Get('warehouse-check')
+  warehouseCheck(
+    @Query('warehouseCode') warehouseCode: string,
+    @Query('quantity') quantity?: string,
+    @Query('excludeId') excludeId?: string,
+  ) {
+    return this.service.capacityPreview(
+      warehouseCode ?? '',
+      Number(quantity ?? 0),
+      excludeId || undefined,
+    );
+  }
+
+  /** Which suppliers a product was bought from, at what price and how fast. */
+  @RequirePermission('PO_CREATE')
+  @Get('supplier-history/:productId')
+  supplierHistory(@Param('productId', ParseUUIDPipe) productId: string) {
+    return this.service.supplierHistory(productId);
+  }
+
+  /** Products really bought from one supplier (by its code). */
+  @RequirePermission('PO_VIEW')
+  @Get('supplier-products/:supplierCode')
+  supplierProducts(@Param('supplierCode') supplierCode: string) {
+    return this.service.supplierProducts(supplierCode);
   }
 
   /** Checks an Excel / CSV file row by row. Saves nothing. */
@@ -116,9 +164,10 @@ export class PurchaseOrdersController {
   @Post(':id/submit')
   submit(
     @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SubmitPurchaseOrderDto,
     @Req() req: authenticatedUserInterface.AuthenticatedRequest,
   ) {
-    return this.service.submit(id, req.user.sub);
+    return this.service.submit(id, req.user.sub, dto?.approverId);
   }
 
   @RequirePermission('PO_APPROVE')
@@ -138,6 +187,13 @@ export class PurchaseOrdersController {
     @Req() req: authenticatedUserInterface.AuthenticatedRequest,
   ) {
     return this.service.reject(id, req.user.sub, dto.reason);
+  }
+
+  /** The rest of the order is not coming: close it. */
+  @RequirePermission('PO_RECEIVE')
+  @Post(':id/close')
+  close(@Param('id', ParseUUIDPipe) id: string) {
+    return this.service.close(id);
   }
 
   @RequirePermission('PO_RECEIVE')

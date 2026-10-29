@@ -8,6 +8,7 @@ import { PurchaseOrder } from './entities/purchase-order.entity';
 import { PurchaseOrderItem } from './entities/purchase-order-item.entity';
 import { GoodsReceipt } from './entities/goods-receipt.entity';
 import { GoodsReceiptItem } from './entities/goods-receipt-item.entity';
+import { GoodsReceiptIssue } from './entities/goods-receipt-issue.entity';
 import { Supplier } from '../suppliers/entities/supplier.entity';
 import { Warehouse } from '../warehouses/entities/warehouse.entity';
 import { Category } from '../categories/entities/category.entity';
@@ -17,6 +18,8 @@ import { Stock } from '../stock/entities/stock.entity';
 import { StockAdjustment } from '../stock-adjustments/entities/stock-adjustment.entity';
 import { User } from '../users/entities/user.entity';
 import { CustomerOrdersModule } from '../customer-orders/customer-orders.module';
+import { UserRole } from '../users/entities/user-role.entity';
+import { ProductsModule } from '../products/products.module';
 
 @Module({
   imports: [
@@ -25,6 +28,7 @@ import { CustomerOrdersModule } from '../customer-orders/customer-orders.module'
       PurchaseOrderItem,
       GoodsReceipt,
       GoodsReceiptItem,
+      GoodsReceiptIssue,
       Supplier,
       Warehouse,
       Product,
@@ -33,7 +37,9 @@ import { CustomerOrdersModule } from '../customer-orders/customer-orders.module'
       Stock,
       StockAdjustment,
       User,
+      UserRole,
     ]),
+    ProductsModule,
   ],
   controllers: [PurchaseOrdersController],
   providers: [PurchaseOrdersService, PurchaseOrdersExcelService],

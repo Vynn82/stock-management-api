@@ -329,14 +329,7 @@ export class CustomerOrdersService {
     });
   }
 
-  /**
-   * Creates a confirmed customer order initiated directly by sales staff.
-   * - Validates customer is ACTIVE (no staff orders for non-active customers).
-   * - Official prices fetched from backend.
-   * - Immediately locks and decrements stock.
-   * - Sets status = CONFIRMED, source = STAFF, createdByStaffId = staffUserId.
-   * - Sends Telegram notification to customer.
-   */
+  /** Creates a confirmed customer order initiated directly by sales staff. */
   async createOrderForStaff(
     staffUserId: string,
     dto: CreateStaffCustomerOrderDto,

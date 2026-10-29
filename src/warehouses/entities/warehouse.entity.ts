@@ -77,6 +77,19 @@ export class Warehouse {
   phone: string | null;
 
   // =========================
+  // CAPACITY
+  // =========================
+
+  /** Most units (all products together) the warehouse may hold. Null = no limit. */
+  @Column({
+    type: 'decimal',
+    precision: 15,
+    scale: 3,
+    nullable: true,
+  })
+  capacity: number | null;
+
+  // =========================
   // STATUS
   // =========================
 

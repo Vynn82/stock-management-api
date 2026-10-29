@@ -31,10 +31,23 @@ export class WarehousesController {
     return this.warehousesService.findAll(query);
   }
 
+  /** How full a warehouse gets if ?quantity= more units go in. */
+  @RequirePermission('WAREHOUSE_VIEW')
+  @Get('capacity-check')
+  capacityCheck(
+    @Query('warehouseCode') warehouseCode: string,
+    @Query('quantity') quantity?: string,
+  ) {
+    return this.warehousesService.capacityCheck(
+      warehouseCode ?? '',
+      Number(quantity ?? 0),
+    );
+  }
+
   @RequirePermission('WAREHOUSE_VIEW')
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.warehousesService.findOne(id);
+    return this.warehousesService.detail(id);
   }
 
   @RequirePermission('WAREHOUSE_MANAGE')

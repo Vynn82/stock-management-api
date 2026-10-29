@@ -6,6 +6,7 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
+import { Brand } from '../../brands/entities/brand.entity';
 import { Category } from '../../categories/entities/category.entity';
 import { Product } from '../../products/entities/product.entity';
 import { ProductVariant } from '../../product-variants/entities/product-variant.entity';
@@ -49,6 +50,14 @@ export class PurchaseOrderItem {
   @JoinColumn({ name: 'new_product_category_id' })
   newProductCategory: Category | null;
 
+  /** Optional brand of the new product. */
+  @Column({ name: 'new_product_brand_id', type: 'uuid', nullable: true })
+  newProductBrandId: string | null;
+
+  @ManyToOne(() => Brand, { nullable: true })
+  @JoinColumn({ name: 'new_product_brand_id' })
+  newProductBrand: Brand | null;
+
   @Column({ name: 'new_product_unit', type: 'varchar', length: 30, nullable: true })
   newProductUnit: string | null;
 
@@ -57,9 +66,9 @@ export class PurchaseOrderItem {
   newProductSku: string | null;
 
   /**
-   * New-product lines are not turned into stock when received. The manager
-   * adds the product through Add Product (Excel import with the initial
-   * stock) and then marks the line as added: this is when that happened.
+   * Only used by orders received while new products were NOT added
+   * automatically: the manager added them by hand and marked the line.
+   * New receipts create the product themselves, so this stays empty.
    */
   @Column({ name: 'catalog_added_at', type: 'timestamp', nullable: true })
   catalogAddedAt: Date | null;

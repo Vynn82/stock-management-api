@@ -1,4 +1,15 @@
-import { IsEmail, IsOptional, IsString, Length } from 'class-validator';
+import { IsEmail, IsIn, IsOptional, IsString, Length } from 'class-validator';
+
+export const SUPPLIER_PLATFORMS = [
+  'TELEGRAM',
+  'WHATSAPP',
+  'FACEBOOK',
+  'WECHAT',
+  'LINE',
+  'INSTAGRAM',
+  'WEBSITE',
+  'OTHER',
+];
 
 export class CreateSupplierDto {
   @IsString()
@@ -27,4 +38,19 @@ export class CreateSupplierDto {
   @IsOptional()
   @IsString()
   address?: string;
+
+  /** One of SUPPLIER_PLATFORMS. */
+  @IsOptional()
+  @IsIn(SUPPLIER_PLATFORMS)
+  platform?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 300)
+  platformLink?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 100)
+  country?: string;
 }

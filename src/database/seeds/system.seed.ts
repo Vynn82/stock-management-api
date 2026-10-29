@@ -40,7 +40,7 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
       ...define('menu', ['view', 'create', 'update', 'delete']),
 
       // Catalog (products + variants)
-      ...define('product', ['view', 'create', 'update', 'delete', 'import', 'image']),
+      ...define('product', ['view', 'create', 'update', 'edit', 'delete', 'import', 'image']),
 
       // Master data: VIEW to read, MANAGE to create / edit / (de)activate
       ...define('category', ['view', 'manage']),
@@ -49,8 +49,9 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
       ...define('warehouse', ['view', 'manage']),
 
       // Stock. STOCK_ADJUST = change stock directly (no approval).
+      // STOCK_TRANSFER = move stock between warehouses directly.
       // ADJUSTMENT_VIEW = read the adjustment audit log.
-      ...define('stock', ['view', 'adjust']),
+      ...define('stock', ['view', 'adjust', 'transfer']),
       ...define('adjustment', ['view']),
 
       // Approval workflow
@@ -165,6 +166,7 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
         'PRODUCT_VIEW',
         'PRODUCT_CREATE',
         'PRODUCT_UPDATE',
+        'PRODUCT_EDIT',
         'PRODUCT_DELETE',
         'PRODUCT_IMPORT',
         'PRODUCT_IMAGE',
@@ -180,6 +182,7 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
 
         'STOCK_VIEW',
         'STOCK_ADJUST',
+        'STOCK_TRANSFER',
         'ADJUSTMENT_VIEW',
 
         'REQUEST_VIEW',
@@ -188,6 +191,7 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
         'REQUEST_APPROVE',
 
         'PO_VIEW',
+        'PO_CREATE',
         'PO_APPROVE',
 
         'REPORT_VIEW',
@@ -195,13 +199,15 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
       ],
 
       // MANAGER: supervises staff, reads everything, certifies AND approves requests.
-      // Changes to data go through requests (no direct create / adjust).
+      // Changes to data go through requests (no direct create / adjust), except
+      // moving stock between warehouses (STOCK_TRANSFER).
       MANAGER: [
         'USER_VIEW',
         'USER_CREATE',
         'USER_ROLE_UPDATE',
 
         ...READ_ONLY,
+        'STOCK_TRANSFER',
         'ADJUSTMENT_VIEW',
 
         'REQUEST_VIEW',
@@ -211,6 +217,7 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
 
         'PRODUCT_IMPORT',
         'PRODUCT_IMAGE',
+        'PRODUCT_EDIT',
 
         'PO_VIEW',
         'PO_CREATE',

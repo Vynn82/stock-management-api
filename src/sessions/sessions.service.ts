@@ -65,4 +65,12 @@ export class SessionsService {
       revokedAt: new Date(),
     });
   }
+
+  /** Signs the user out everywhere (used after a password reset). */
+  async revokeAllForUser(userId: string) {
+    await this.sessionRepository.update(
+      { userId, revokedAt: IsNull() },
+      { revokedAt: new Date() },
+    );
+  }
 }

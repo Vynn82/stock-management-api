@@ -19,6 +19,7 @@ import {
   CreateStockAdjustmentDto,
   CreateStockAdjustmentItemDto,
 } from './dto/create-stock-adjustment.dto';
+import { CreateStockTransferDto } from './dto/create-stock-transfer.dto';
 import { StockAdjustmentQueryDto } from './dto/stock-adjustment-query.dto';
 import { Public } from '../auth/decorators/public.decorator';
 import * as authenticatedUserInterface from '../auth/interfaces/authenticated-request.interface';
@@ -70,6 +71,22 @@ export class StockAdjustmentsController {
   }
 
   // =====================================================
+  // DIRECT STOCK TRANSFER (SUPER_ADMIN, ADMIN & MANAGER)
+  // =====================================================
+
+  @RequirePermission('STOCK_TRANSFER')
+  @Post('transfer')
+  transfer(
+    @Body() dto: CreateStockTransferDto,
+    @Req() req: authenticatedUserInterface.AuthenticatedRequest,
+  ) {
+    return this.stockAdjustmentsService.transferDirect(
+      dto.transfers,
+      req.user.sub,
+    );
+  }
+
+  // =====================================================
   // DIRECT EXCEL IMPORT (ADMIN & SUPER_ADMIN)
   // =====================================================
 
@@ -106,6 +123,49 @@ export class StockAdjustmentsController {
   // =====================================================
   // AUDIT LOG LIST & DETAILS
   // =====================================================
+
+  /**
+   * One timeline of every stock movement: Stock In, Stock Out, Transfer and
+   * Adjustment. Filters: ?kind=IN|OUT|TRANSFER|ADJUSTMENT, ?productId=,
+   * ?page=, ?limit=. Must stay above `:id`.
+   */
+  @RequirePermission('ADJUSTMENT_VIEW')
+  @Get('history')
+  history(
+    @Query('kind') kind?: string,
+    @Query('productId') productId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.stockAdjustmentsService.history({
+      kind,
+      productId,
+      page: Number(page),
+      limit: Number(limit),
+    });
+  }
+
+  /**
+   * The same timeline, but only the caller's own movements (what they did
+   * and the requests they made). For staff who cannot see everyone's history.
+   */
+  @RequirePermission('REQUEST_CREATE')
+  @Get('history/mine')
+  historyMine(
+    @Req() req: authenticatedUserInterface.AuthenticatedRequest,
+    @Query('kind') kind?: string,
+    @Query('productId') productId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.stockAdjustmentsService.history({
+      kind,
+      productId,
+      userId: req.user.sub,
+      page: Number(page),
+      limit: Number(limit),
+    });
+  }
 
   @RequirePermission('ADJUSTMENT_VIEW')
   @Get()

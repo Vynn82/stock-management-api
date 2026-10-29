@@ -12,6 +12,8 @@ import { UserRole } from '../users/entities/user-role.entity';
 
 import { SessionsModule } from '../sessions/sessions.module';
 import { UsersModule } from '../users/users.module';
+import { MailModule } from '../mail/mail.module';
+import { PasswordReset } from './entities/password-reset.entity';
 
 import { AccessTokenGuard } from './guard/access-token.guard';
 import { MustChangePasswordGuard } from './guard/must-change-password.guard';
@@ -21,7 +23,7 @@ import { RolesGuard } from './guard/roles.guard';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, UserRole, RolePermission]),
+    TypeOrmModule.forFeature([User, UserRole, RolePermission, PasswordReset]),
 
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -38,6 +40,7 @@ import { RolesGuard } from './guard/roles.guard';
 
     SessionsModule,
     UsersModule,
+    MailModule,
   ],
 
   controllers: [AuthController],

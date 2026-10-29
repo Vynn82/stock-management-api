@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   DataSource,
   EntityManager,
+  Not,
   Repository,
   SelectQueryBuilder,
 } from 'typeorm';
@@ -18,6 +19,7 @@ import { Supplier } from '../suppliers/entities/supplier.entity';
 import { ProductVariant } from '../product-variants/entities/product-variant.entity';
 import { Stock } from '../stock/entities/stock.entity';
 import { Warehouse } from '../warehouses/entities/warehouse.entity';
+import { assertFits, loadWarehouse } from '../warehouses/warehouse-capacity';
 import { ProductDirectCreateBatchItem } from './products-excel.service';
 import { ProductFilterDto } from './dto/product-filter.dto';
 import {
@@ -90,20 +92,11 @@ export class ProductsService {
     return createPaginatedResult(formattedData, total, filterDto);
   }
 
-  /**
-   * Exact lookup used by the scanner: matches a scanned/typed code against the
-   * product's code / SKU / barcode OR any of its variants' code / SKU / barcode
-   * (case-insensitive). Returns the full product (all variants + stock per
-   * warehouse) plus `matchedVariantId` when the code belonged to a variant.
-   */
   async findByCode(rawCode: string) {
     const code = rawCode?.trim();
     if (!code) {
       throw new BadRequestException('Code is required');
     }
-
-    // Step 1: find the product id (filtering on the joined variants here
-    // would otherwise strip the sibling variants from the loaded result).
     const hit = await this.productRepository
       .createQueryBuilder('product')
       .leftJoin('product.variants', 'variant')
@@ -255,6 +248,233 @@ export class ProductsService {
     return product;
   }
 
+  /** Edits a product and (optionally) its existing variants. */
+  async updateProduct(id: string, body: any) {
+    const data = body ?? {};
+    const has = (key: string) => data[key] !== undefined;
+    const text = (value: unknown) =>
+      value === null || value === undefined ? '' : String(value).trim();
+    const money = (value: unknown, label: string) => {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < 0) {
+        throw new BadRequestException(`${label} must be a number of 0 or more`);
+      }
+      return n;
+    };
+    const optionalMoney = (value: unknown, label: string) =>
+      value === null || value === undefined || value === ''
+        ? null
+        : money(value, label);
+
+    await this.dataSource.transaction(async (manager) => {
+      const product = await manager.findOne(Product, {
+        where: { id },
+        relations: { variants: true },
+      });
+      if (!product) throw new NotFoundException('Product not found');
+
+      if (has('name')) {
+        const name = text(data.name);
+        if (!name) throw new BadRequestException('Product name is required');
+        if (name.length > 200) {
+          throw new BadRequestException('Product name is too long (max 200)');
+        }
+        product.name = name;
+      }
+      if (has('description')) product.description = text(data.description) || null;
+      if (has('unit')) {
+        const unit = text(data.unit);
+        if (!unit) throw new BadRequestException('Unit is required');
+        product.unit = unit;
+      }
+
+      if (has('categoryCode')) {
+        const category = await manager.findOne(Category, {
+          where: { code: text(data.categoryCode), isActive: true },
+        });
+        if (!category) {
+          throw new BadRequestException(
+            `Category "${text(data.categoryCode)}" not found or inactive`,
+          );
+        }
+        product.categoryId = category.id;
+        product.category = category;
+      }
+      if (has('brandCode')) {
+        const code = text(data.brandCode);
+        if (code) {
+          const brand = await manager.findOne(Brand, {
+            where: { code, isActive: true },
+          });
+          if (!brand) {
+            throw new BadRequestException(
+              `Brand "${code}" not found or inactive`,
+            );
+          }
+          product.brandId = brand.id;
+          product.brand = brand;
+        } else {
+          product.brandId = null;
+          product.brand = null;
+        }
+      }
+      if (has('supplierCode')) {
+        const code = text(data.supplierCode);
+        if (code) {
+          const supplier = await manager.findOne(Supplier, {
+            where: { code, isActive: true },
+          });
+          if (!supplier) {
+            throw new BadRequestException(
+              `Supplier "${code}" not found or inactive`,
+            );
+          }
+          product.supplierId = supplier.id;
+          product.supplier = supplier;
+        } else {
+          product.supplierId = null;
+          product.supplier = null;
+        }
+      }
+
+      if (has('sku')) {
+        const sku = text(data.sku);
+        if (!sku) throw new BadRequestException('SKU is required');
+        const taken =
+          (await manager.findOne(Product, { where: { sku, id: Not(id) } })) ||
+          (await manager.findOne(ProductVariant, { where: { sku } }));
+        if (taken) {
+          throw new BadRequestException(`SKU "${sku}" is already used`);
+        }
+        product.sku = sku;
+      }
+      if (has('barcode')) {
+        const barcode = text(data.barcode);
+        if (barcode) {
+          const taken =
+            (await manager.findOne(Product, {
+              where: { barcode, id: Not(id) },
+            })) || (await manager.findOne(ProductVariant, { where: { barcode } }));
+          if (taken) {
+            throw new BadRequestException(
+              `Barcode "${barcode}" is already used`,
+            );
+          }
+          product.barcode = barcode;
+        } else {
+          // Never leave a product without a barcode: scanning relies on it.
+          product.barcode = await this.barcodesService.generateUniqueBarcode();
+        }
+      }
+
+      if (has('costPrice')) product.costPrice = money(data.costPrice, 'Cost price');
+      if (has('sellingPrice')) {
+        product.sellingPrice = money(data.sellingPrice, 'Selling price');
+      }
+      if (has('minimumStock')) {
+        product.minimumStock = money(data.minimumStock, 'Minimum stock');
+      }
+      if (has('maximumStock')) {
+        product.maximumStock = optionalMoney(data.maximumStock, 'Maximum stock');
+      }
+      if (
+        product.maximumStock !== null &&
+        Number(product.maximumStock) < Number(product.minimumStock)
+      ) {
+        throw new BadRequestException(
+          'Maximum stock cannot be lower than minimum stock',
+        );
+      }
+
+      await manager.save(Product, product);
+
+      // Variants: matched by their code; only existing ones can be edited.
+      if (Array.isArray(data.variants)) {
+        for (const v of data.variants) {
+          const code = text(v?.code ?? v?.variantCode);
+          const variant = product.variants?.find((x) => x.code === code);
+          if (!variant) {
+            throw new BadRequestException(
+              `Variant "${code}" does not belong to this product`,
+            );
+          }
+          const vHas = (key: string) => v[key] !== undefined;
+
+          if (vHas('name')) {
+            const name = text(v.name);
+            if (!name) {
+              throw new BadRequestException('Variant name is required');
+            }
+            variant.name = name;
+          }
+          if (vHas('sku')) {
+            const sku = text(v.sku);
+            if (!sku) throw new BadRequestException('Variant SKU is required');
+            const taken =
+              (await manager.findOne(ProductVariant, {
+                where: { sku, id: Not(variant.id) },
+              })) || (await manager.findOne(Product, { where: { sku } }));
+            if (taken) {
+              throw new BadRequestException(`SKU "${sku}" is already used`);
+            }
+            variant.sku = sku;
+          }
+          if (vHas('barcode')) {
+            const barcode = text(v.barcode);
+            if (barcode) {
+              const taken =
+                (await manager.findOne(ProductVariant, {
+                  where: { barcode, id: Not(variant.id) },
+                })) || (await manager.findOne(Product, { where: { barcode } }));
+              if (taken) {
+                throw new BadRequestException(
+                  `Barcode "${barcode}" is already used`,
+                );
+              }
+              variant.barcode = barcode;
+            } else {
+              variant.barcode =
+                await this.barcodesService.generateUniqueBarcode();
+            }
+          }
+          if (vHas('attributes')) {
+            variant.attributes =
+              v.attributes && typeof v.attributes === 'object'
+                ? v.attributes
+                : null;
+          }
+          if (vHas('costPrice')) {
+            variant.costPrice = optionalMoney(v.costPrice, 'Variant cost price');
+          }
+          if (vHas('sellingPrice')) {
+            variant.sellingPrice = optionalMoney(
+              v.sellingPrice,
+              'Variant selling price',
+            );
+          }
+          await manager.save(ProductVariant, variant);
+        }
+      }
+    });
+
+    // Same shape as the list, so the app can refresh the row in place.
+    const fresh = await this.productRepository
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.category', 'category')
+      .leftJoinAndSelect('product.brand', 'brand')
+      .leftJoinAndSelect('product.supplier', 'supplier')
+      .leftJoinAndSelect('product.variants', 'variants')
+      .leftJoinAndSelect('variants.stocks', 'variantStocks')
+      .leftJoinAndSelect('variantStocks.warehouse', 'variantWarehouse')
+      .leftJoinAndSelect('product.stocks', 'stocks')
+      .leftJoinAndSelect('stocks.variant', 'stockVariant')
+      .leftJoinAndSelect('stocks.warehouse', 'warehouse')
+      .where('product.id = :id', { id })
+      .getOne();
+    if (!fresh) throw new NotFoundException('Product not found');
+    return { message: 'Product updated', product: this.formatProduct(fresh) };
+  }
+
   /** Sets (or replaces) the product photo with an already uploaded image URL. */
   async updateImage(id: string, imageUrl: string) {
     const product = await this.findOne(id);
@@ -401,6 +621,43 @@ export class ProductsService {
     });
   }
 
+  async createForPurchaseOrder(
+    manager: EntityManager,
+    line: {
+      name: string;
+      categoryCode: string;
+      brandCode?: string | null;
+      supplierCode?: string | null;
+      unit: string;
+      sku: string | null;
+      costPrice: number;
+      warehouseCode: string;
+      quantity: number;
+      location?: string | null;
+    },
+  ) {
+    return this.insertProductDirect(manager, {
+      product: {
+        productName: line.name,
+        categoryCode: line.categoryCode,
+        brandCode: line.brandCode ?? undefined,
+        supplierCode: line.supplierCode ?? undefined,
+        unit: line.unit,
+        productSku: line.sku ?? undefined,
+        productCostPrice: line.costPrice,
+        hasVariants: false,
+      },
+      variants: [],
+      stock: [
+        {
+          warehouseCode: line.warehouseCode,
+          quantity: line.quantity,
+          location: line.location ?? undefined,
+        },
+      ],
+    });
+  }
+
   async createManyDirect(
     batchItems: ProductDirectCreateBatchItem[],
     _userId?: string,
@@ -425,12 +682,6 @@ export class ProductsService {
     });
   }
 
-  /**
-   * Dry run of createManyDirect for the "review before confirm" screen: does
-   * the exact same inserts (so every real validation - unknown category,
-   * duplicate SKU, missing warehouse ... - applies) and then rolls the whole
-   * transaction back. Nothing is saved.
-   */
   async previewManyDirect(batchItems: ProductDirectCreateBatchItem[]) {
     if (!batchItems || batchItems.length === 0) {
       throw new BadRequestException('No products to import');
@@ -816,6 +1067,13 @@ export class ProductsService {
         throw new BadRequestException(
           `Quantity must be a positive number for warehouse "${warehouseCode}"`,
         );
+      }
+
+      // The initial stock must fit in the warehouse (earlier rows of this
+      // same save are already counted: they are in the same transaction).
+      const load = await loadWarehouse(manager, warehouse.id);
+      if (load && load.capacity !== null) {
+        assertFits({ ...load, incoming: 0 }, quantity);
       }
 
       let variantId: string | null = null;

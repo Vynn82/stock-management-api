@@ -124,6 +124,8 @@ export class PurchaseOrdersExcelService {
     lines: {
       name: string;
       categoryCode: string;
+      brandCode?: string | null;
+      supplierCode?: string | null;
       unit: string;
       sku: string | null;
       warehouseCode: string;
@@ -147,6 +149,8 @@ export class PurchaseOrdersExcelService {
       const values: Record<string, unknown> = {
         product_name: line.name,
         category_code: line.categoryCode,
+        brand_code: line.brandCode ?? '',
+        supplier_code: line.supplierCode ?? '',
         has_variants: 'FALSE',
         unit: line.unit,
         product_sku: line.sku ?? '',

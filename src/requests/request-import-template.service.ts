@@ -58,9 +58,6 @@ export class RequestImportTemplateService {
     };
 
     // =====================================================
-    // REQUEST TYPE
-    // NO BORDER HERE
-    // =====================================================
 
     worksheet['A3'].s = {
       font: {

@@ -1,9 +1,11 @@
 import {
   IsLatitude,
   IsLongitude,
+  IsNumber,
   IsOptional,
   IsString,
   Length,
+  Min,
 } from 'class-validator';
 
 export class CreateWarehouseDto {
@@ -40,4 +42,10 @@ export class CreateWarehouseDto {
   @IsString()
   @Length(1, 50)
   phone?: string;
+
+  /** Most units the warehouse may hold; leave empty (or null) for no limit. */
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @Min(1)
+  capacity?: number | null;
 }

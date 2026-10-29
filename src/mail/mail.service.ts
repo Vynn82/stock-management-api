@@ -315,4 +315,46 @@ export class MailService {
 `,
     });
   }
+
+  async sendPasswordResetOtp(
+    email: string,
+    firstName: string,
+    otp: string,
+    expiresInMinutes: number,
+  ) {
+    await this.transporter.sendMail({
+      from: `"Stock Management System" <${process.env.MAIL_USER}>`,
+      to: email,
+      subject: 'Your password reset code',
+      html: `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Password reset code</title></head>
+<body style="margin:0;padding:0;background-color:#f4f6f8;font-family:Arial, Helvetica, sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f6f8;padding:30px 15px;">
+  <tr><td align="center">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background-color:#ffffff;border:1px solid #e5e7eb;border-radius:10px;">
+      <tr><td style="padding:32px 36px;">
+        <p style="margin:0 0 18px 0;font-size:12px;font-weight:700;letter-spacing:0.8px;color:#6d28d9;">STOCK MANAGEMENT SYSTEM</p>
+        <h1 style="margin:0 0 14px 0;font-size:22px;line-height:30px;color:#1f2937;">Reset your password</h1>
+        <p style="margin:0 0 18px 0;font-size:14px;line-height:23px;color:#6b7280;">
+          Hello <strong style="color:#111827;">${firstName}</strong>, use the code below to reset your password.
+          It expires in ${expiresInMinutes} minutes.
+        </p>
+        <div style="margin:0 0 20px 0;padding:16px 0;text-align:center;background-color:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;">
+          <span style="font-size:32px;font-weight:700;letter-spacing:10px;color:#6d28d9;">${otp}</span>
+        </div>
+        <p style="margin:0 0 6px 0;font-size:12px;line-height:19px;color:#9ca3af;">
+          Never share this code with anyone. If you did not request it, you can ignore this email — your password will not change.
+        </p>
+        <p style="margin:12px 0 0 0;font-size:11px;color:#9ca3af;">© ${new Date().getFullYear()} Stock Management System</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>
+`,
+    });
+  }
 }

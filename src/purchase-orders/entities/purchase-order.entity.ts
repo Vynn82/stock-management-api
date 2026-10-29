@@ -22,6 +22,8 @@ export enum PurchaseOrderStatus {
   REJECTED = 'REJECTED',
   PARTIALLY_RECEIVED = 'PARTIALLY_RECEIVED',
   RECEIVED = 'RECEIVED',
+  /** Partly received, and the person closed it: the rest is not coming. */
+  CLOSED = 'CLOSED',
 }
 
 @Entity('purchase_orders')
@@ -72,6 +74,17 @@ export class PurchaseOrder {
   @ManyToOne(() => User, { nullable: false })
   @JoinColumn({ name: 'created_by_id' })
   createdBy: User;
+
+  /**
+   * Who the creator asked to approve this order (a Manager must pick one).
+   * Empty when an Admin / Super Admin created it: it is approved on the spot.
+   */
+  @Column({ name: 'requested_approver_id', type: 'uuid', nullable: true })
+  requestedApproverId: string | null;
+
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'requested_approver_id' })
+  requestedApprover: User | null;
 
   @Column({ name: 'approved_by_id', type: 'uuid', nullable: true })
   approvedById: string | null;

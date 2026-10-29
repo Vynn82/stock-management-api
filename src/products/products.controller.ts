@@ -101,12 +101,7 @@ export class ProductsController {
     return res.send(file);
   }
 
-  /**
-   * Import products directly from Excel (PRODUCT_IMPORT: Admin, Manager,
-   * Super Admin). Separate from PRODUCT_CREATE so that giving a role the
-   * import does not also switch its Add Product form from "send a request"
-   * to "save directly".
-   */
+  /** Import products directly from Excel (PRODUCT_IMPORT: Admin, Manager, Super Admin). */
   @Post('import/preview')
   @RequirePermission('PRODUCT_IMPORT')
   @UseInterceptors(FileInterceptor('file'))
@@ -155,6 +150,13 @@ export class ProductsController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.productsService.findOne(id);
+  }
+
+  /** Edit a product's details (name, category, brand, supplier, unit, SKU, barcode, prices, stock rules, notes) and its variants. */
+  @RequirePermission('PRODUCT_EDIT')
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() body: any) {
+    return this.productsService.updateProduct(id, body);
   }
 
   /**

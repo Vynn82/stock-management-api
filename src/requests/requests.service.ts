@@ -38,6 +38,7 @@ import { Product } from '../products/entities/product.entity';
 import { ProductVariant } from '../product-variants/entities/product-variant.entity';
 import { Stock } from '../stock/entities/stock.entity';
 import { Warehouse } from '../warehouses/entities/warehouse.entity';
+import { assertFits, loadWarehouse } from '../warehouses/warehouse-capacity';
 import { StockAdjustment } from '../stock-adjustments/entities/stock-adjustment.entity';
 import {
   PaginationDto,
@@ -212,6 +213,7 @@ export class RequestsService {
       }
 
       this.validateRequest(dto);
+      await this.assertCreateFits(manager, dto);
 
       const requestNo = this.generateRequestNo();
 
@@ -847,11 +849,6 @@ export class RequestsService {
         }
 
         // case RequestType.STOCK_IN:
-        // case RequestType.STOCK_OUT:
-        // case RequestType.STOCK_TRANSFER: {
-        //   // Your existing stock processing here
-        //   break;
-        // }
 
         case RequestType.STOCK_IN: {
           await this.stockInFromRequest(manager, request);
@@ -949,12 +946,7 @@ export class RequestsService {
     });
   }
 
-  /**
-   * STOCK_IN / STOCK_OUT / STOCK_TRANSFER / STOCK_ADJUSTMENT items only carry
-   * product + warehouse codes. Check they exist now (fail early, not at
-   * approval time) and copy the product name / SKU / unit / category onto the
-   * item the same way a product-create request does.
-   */
+  /** STOCK_IN / STOCK_OUT / STOCK_TRANSFER / STOCK_ADJUSTMENT items only carry product + warehouse codes. */
   private async enrichStockItems(
     manager: EntityManager,
     requestType: RequestType,
@@ -1034,6 +1026,62 @@ export class RequestsService {
   }
 
   /** Next internal product code, also skipping codes reserved by pending requests. */
+  /**
+   * Rejects stock that would not fit a warehouse's capacity limit
+   * (a warehouse with no limit is never rejected).
+   */
+  private async assertRoom(
+    manager: EntityManager,
+    warehouseCode: string,
+    quantity: number,
+  ): Promise<void> {
+    const warehouse = await manager.findOne(Warehouse, {
+      where: { code: warehouseCode.trim() },
+    });
+    if (!warehouse) return;
+    const load = await loadWarehouse(manager, warehouse.id);
+    if (load && load.capacity !== null) {
+      assertFits({ ...load, incoming: 0 }, quantity);
+    }
+  }
+
+  /**
+   * Early check when a stock request is made: the units coming into each
+   * warehouse (stock in, transfer destination, adjustment increase) must
+   * fit. The same check runs again when the request is approved.
+   */
+  private async assertCreateFits(
+    manager: EntityManager,
+    dto: CreateRequestDto,
+  ): Promise<void> {
+    const incoming = new Map<string, number>();
+    const add = (code?: string | null, quantity?: number | null) => {
+      const key = code?.trim();
+      const qty = Number(quantity ?? 0);
+      if (!key || !Number.isFinite(qty) || qty <= 0) return;
+      incoming.set(key, (incoming.get(key) ?? 0) + qty);
+    };
+
+    if (
+      dto.requestType === RequestType.STOCK_IN ||
+      dto.requestType === RequestType.PRODUCT_CREATE
+    ) {
+      for (const item of dto.stock ?? []) add(item.warehouseCode, item.quantity);
+    } else if (dto.requestType === RequestType.STOCK_TRANSFER) {
+      for (const item of dto.stock ?? []) add(item.toWarehouseCode, item.quantity);
+    } else if (dto.requestType === RequestType.STOCK_ADJUSTMENT) {
+      for (const item of dto.adjustments ?? []) {
+        if (String(item.adjustmentType) === 'INCREASE') {
+          add(item.warehouseCode, item.quantity);
+        }
+      }
+    }
+
+    for (const [code, quantity] of incoming) {
+      await this.assertRoom(manager, code, quantity);
+    }
+  }
+
   private async generateProductCode(manager: EntityManager): Promise<string> {
     await manager.query('SELECT pg_advisory_xact_lock(7001)');
     const rows: Array<{ next: string }> = await manager.query(
@@ -2264,6 +2312,9 @@ export class RequestsService {
         );
       }
 
+      // The initial stock must fit (checked again at approval).
+      await this.assertRoom(manager, warehouse.code, quantity);
+
       // =====================================================
       // 3. FIND VARIANT
       // =====================================================
@@ -2478,6 +2529,7 @@ export class RequestsService {
       // =========================
 
       if (item.adjustmentType === 'INCREASE') {
+        await this.assertRoom(manager, warehouse.code, quantity);
         stock.quantity = Number(stock.quantity) + quantity;
       } else {
         stock.quantity = Number(stock.quantity) - quantity;
@@ -2578,6 +2630,9 @@ export class RequestsService {
           );
         }
       }
+
+      // The units coming in must fit the warehouse's capacity.
+      await this.assertRoom(manager, warehouse.code, quantity);
 
       // Find stock
       let stock = await manager.findOne(Stock, {
@@ -2834,6 +2889,9 @@ export class RequestsService {
       // ==========================================
       // DESTINATION STOCK
       // ==========================================
+
+      // The units arriving must fit the destination's capacity.
+      await this.assertRoom(manager, toWarehouse.code, quantity);
 
       let destinationStock = await manager.findOne(Stock, {
         where: {

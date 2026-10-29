@@ -11,6 +11,7 @@ import {
 import { User } from '../../users/entities/user.entity';
 import { PurchaseOrder } from './purchase-order.entity';
 import { GoodsReceiptItem } from './goods-receipt-item.entity';
+import { GoodsReceiptIssue } from './goods-receipt-issue.entity';
 
 /** One delivery against a purchase order. A PO can have several. */
 @Entity('goods_receipts')
@@ -46,8 +47,15 @@ export class GoodsReceipt {
   @Column({ type: 'text', nullable: true })
   note: string | null;
 
+  /** How the delivery went, 1 (bad) to 5 (great). Optional. */
+  @Column({ type: 'smallint', nullable: true })
+  rating: number | null;
+
   @OneToMany(() => GoodsReceiptItem, (item) => item.goodsReceipt)
   items: GoodsReceiptItem[];
+
+  @OneToMany(() => GoodsReceiptIssue, (issue) => issue.goodsReceipt)
+  issues: GoodsReceiptIssue[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

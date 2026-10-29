@@ -11,6 +11,8 @@ import { DataSource, IsNull, Repository } from 'typeorm';
 import * as XLSX from 'xlsx-js-style';
 
 import { StockAdjustment } from './entities/stock-adjustment.entity';
+import { StockTransfer } from './entities/stock-transfer.entity';
+import { CreateStockTransferItemDto } from './dto/create-stock-transfer.dto';
 import { Stock } from '../stock/entities/stock.entity';
 import { Product } from '../products/entities/product.entity';
 import { ProductVariant } from '../product-variants/entities/product-variant.entity';
@@ -26,6 +28,7 @@ import {
   getPaginationOptions,
   PaginatedResult,
 } from '../common/pagination';
+import { assertFits, loadWarehouse } from '../warehouses/warehouse-capacity';
 
 @Injectable()
 export class StockAdjustmentsService {
@@ -50,6 +53,174 @@ export class StockAdjustmentsService {
     @Inject(forwardRef(() => CustomerOrdersService))
     private readonly customerOrdersService?: CustomerOrdersService,
   ) {}
+
+  /** Moves stock from one warehouse to another straight away (STOCK_TRANSFER: Super Admin, Admin, Manager). */
+  async transferDirect(items: CreateStockTransferItemDto[], userId?: string) {
+    if (!items || items.length === 0) {
+      throw new BadRequestException('No stock transfer items provided');
+    }
+    const isUuid = (v: string) =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+
+    return this.dataSource.transaction(async (manager) => {
+      const results: Array<{
+        transferId: string;
+        productCode: string;
+        variantCode: string | null;
+        fromWarehouseCode: string;
+        toWarehouseCode: string;
+        quantity: number;
+      }> = [];
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const label = `Item ${i + 1} (${item.productCode || 'unknown'})`;
+        const quantity = Number(item.quantity);
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+          throw new BadRequestException(`${label}: quantity must be above 0`);
+        }
+        if (item.fromWarehouseCode.trim() === item.toWarehouseCode.trim()) {
+          throw new BadRequestException(
+            `${label}: from and to warehouse cannot be the same`,
+          );
+        }
+
+        const productVal = item.productCode.trim();
+        const productWhere: any[] = [
+          { code: productVal, isActive: true },
+          { barcode: productVal, isActive: true },
+          { sku: productVal, isActive: true },
+        ];
+        if (isUuid(productVal)) {
+          productWhere.unshift({ id: productVal, isActive: true });
+        }
+        const product = await manager.findOne(Product, { where: productWhere });
+        if (!product) {
+          throw new NotFoundException(
+            `${label}: product "${item.productCode}" not found or inactive`,
+          );
+        }
+
+        let variant: ProductVariant | null = null;
+        if (item.variantCode?.trim()) {
+          const v = item.variantCode.trim();
+          const variantWhere: any[] = [
+            { code: v, productId: product.id, isActive: true },
+            { barcode: v, productId: product.id, isActive: true },
+            { sku: v, productId: product.id, isActive: true },
+          ];
+          if (isUuid(v)) {
+            variantWhere.unshift({
+              id: v,
+              productId: product.id,
+              isActive: true,
+            });
+          }
+          variant = await manager.findOne(ProductVariant, {
+            where: variantWhere,
+          });
+          if (!variant) {
+            throw new NotFoundException(
+              `${label}: variant "${item.variantCode}" not found for product "${product.code}"`,
+            );
+          }
+        }
+
+        const fromWarehouse = await manager.findOne(Warehouse, {
+          where: { code: item.fromWarehouseCode.trim(), isActive: true },
+        });
+        if (!fromWarehouse) {
+          throw new NotFoundException(
+            `${label}: source warehouse "${item.fromWarehouseCode}" not found or inactive`,
+          );
+        }
+        const toWarehouse = await manager.findOne(Warehouse, {
+          where: { code: item.toWarehouseCode.trim(), isActive: true },
+        });
+        if (!toWarehouse) {
+          throw new NotFoundException(
+            `${label}: destination warehouse "${item.toWarehouseCode}" not found or inactive`,
+          );
+        }
+
+        // Source: must hold enough.
+        const source = await manager.findOne(Stock, {
+          where: {
+            productId: product.id,
+            variantId: variant ? variant.id : IsNull(),
+            warehouseId: fromWarehouse.id,
+          },
+        });
+        if (!source) {
+          throw new BadRequestException(
+            `${label}: no stock of "${product.code}" in warehouse "${fromWarehouse.code}"`,
+          );
+        }
+        const available = Number(source.quantity);
+        if (available < quantity) {
+          throw new BadRequestException(
+            `${label}: insufficient stock in "${fromWarehouse.code}". Available: ${available}, requested: ${quantity}`,
+          );
+        }
+
+        // Destination: the units must fit.
+        const load = await loadWarehouse(manager, toWarehouse.id);
+        if (load && load.capacity !== null) {
+          assertFits({ ...load, incoming: 0 }, quantity);
+        }
+
+        source.quantity = available - quantity;
+        await manager.save(Stock, source);
+
+        let target = await manager.findOne(Stock, {
+          where: {
+            productId: product.id,
+            variantId: variant ? variant.id : IsNull(),
+            warehouseId: toWarehouse.id,
+          },
+        });
+        if (target) {
+          target.quantity = Number(target.quantity) + quantity;
+        } else {
+          target = manager.create(Stock, {
+            productId: product.id,
+            variantId: variant ? variant.id : null,
+            warehouseId: toWarehouse.id,
+            quantity,
+          });
+        }
+        await manager.save(Stock, target);
+
+        const saved = await manager.save(
+          StockTransfer,
+          manager.create(StockTransfer, {
+            transferredById: userId ?? null,
+            productId: product.id,
+            variantId: variant ? variant.id : null,
+            fromWarehouseId: fromWarehouse.id,
+            toWarehouseId: toWarehouse.id,
+            quantity,
+            reason: item.reason?.trim() || null,
+          }),
+        );
+
+        results.push({
+          transferId: saved.id,
+          productCode: product.code,
+          variantCode: variant ? variant.code : null,
+          fromWarehouseCode: fromWarehouse.code,
+          toWarehouseCode: toWarehouse.code,
+          quantity,
+        });
+      }
+
+      return {
+        message: 'Stock transferred successfully',
+        count: results.length,
+        data: results,
+      };
+    });
+  }
 
   /**
    * Directly adjust stock balances (ADMIN and SUPER_ADMIN only).
@@ -243,7 +414,11 @@ export class StockAdjustmentsService {
           stock.quantity = newStock;
           await manager.save(Stock, stock);
         } else {
-          // INCREASE
+          // INCREASE: the units must fit in the warehouse.
+          const load = await loadWarehouse(manager, warehouse.id);
+          if (load && load.capacity !== null) {
+            assertFits({ ...load, incoming: 0 }, absoluteQty);
+          }
           if (stock) {
             newStock = previousStock + absoluteQty;
             stock.quantity = newStock;
@@ -633,6 +808,157 @@ export class StockAdjustmentsService {
 
     const [data, total] = await qb.getManyAndCount();
     return createPaginatedResult(data, total, query);
+  }
+
+  /** Stock movement timeline: stock_adjustments plus approved Stock In/Out/Transfer requests, newest first. */
+  async history(opts: {
+    kind?: string;
+    productId?: string;
+    /** When set, only what this user did (their own adjustments and requests). */
+    userId?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const kinds = ['IN', 'OUT', 'TRANSFER', 'ADJUSTMENT'];
+    const kind =
+      opts.kind && kinds.includes(opts.kind.toUpperCase())
+        ? opts.kind.toUpperCase()
+        : null;
+    const productId = opts.productId?.trim() || null;
+    if (
+      productId &&
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        productId,
+      )
+    ) {
+      throw new BadRequestException('productId must be a UUID');
+    }
+    const limit = Math.min(
+      Math.max(Number.isFinite(opts.limit) ? Number(opts.limit) : 20, 1),
+      100,
+    );
+    const page = Math.max(
+      Number.isFinite(opts.page) ? Number(opts.page) : 1,
+      1,
+    );
+
+    const base = `
+      WITH h AS (
+        SELECT sa.id::text AS id,
+               'ADJUSTMENT' AS kind,
+               sa.created_at AS at,
+               p.id AS product_id,
+               p.code AS product_code,
+               p.name AS product_name,
+               v.name AS variant_name,
+               CASE WHEN sa.adjustment_type = 'DECREASE' THEN w.name END AS from_warehouse,
+               CASE WHEN sa.adjustment_type = 'INCREASE' THEN w.name END AS to_warehouse,
+               sa.quantity::float8 AS quantity,
+               sa.reason AS reason,
+               u.staff_id AS by_staff,
+               r.request_no AS request_no,
+               COALESCE(sa.adjusted_by_id, r.requester_id) AS owner_id
+        FROM stock_adjustments sa
+        JOIN products p ON p.id = sa.product_id
+        JOIN warehouses w ON w.id = sa.warehouse_id
+        LEFT JOIN product_variants v ON v.id = sa.variant_id
+        LEFT JOIN users u ON u.id = sa.adjusted_by_id
+        LEFT JOIN requests r ON r.id = sa.request_id
+
+        UNION ALL
+
+        SELECT st.id::text AS id,
+               'TRANSFER' AS kind,
+               st.created_at AS at,
+               p.id AS product_id,
+               p.code AS product_code,
+               p.name AS product_name,
+               v.name AS variant_name,
+               fw.name AS from_warehouse,
+               tw.name AS to_warehouse,
+               st.quantity::float8 AS quantity,
+               st.reason AS reason,
+               u.staff_id AS by_staff,
+               NULL::text AS request_no,
+               st.transferred_by_id AS owner_id
+        FROM stock_transfers st
+        JOIN products p ON p.id = st.product_id
+        JOIN warehouses fw ON fw.id = st.from_warehouse_id
+        JOIN warehouses tw ON tw.id = st.to_warehouse_id
+        LEFT JOIN product_variants v ON v.id = st.variant_id
+        LEFT JOIN users u ON u.id = st.transferred_by_id
+
+        UNION ALL
+
+        SELECT ri.id::text AS id,
+               CASE r.request_type WHEN 'STOCK_IN' THEN 'IN'
+                                   WHEN 'STOCK_OUT' THEN 'OUT'
+                                   ELSE 'TRANSFER' END AS kind,
+               r.updated_at AS at,
+               p.id AS product_id,
+               ri.product_code AS product_code,
+               ri.product_name AS product_name,
+               ri.variant_name AS variant_name,
+               CASE r.request_type WHEN 'STOCK_OUT' THEN w.name
+                                   WHEN 'STOCK_TRANSFER' THEN fw.name END AS from_warehouse,
+               CASE r.request_type WHEN 'STOCK_IN' THEN w.name
+                                   WHEN 'STOCK_TRANSFER' THEN tw.name END AS to_warehouse,
+               ri.quantity::float8 AS quantity,
+               COALESCE(NULLIF(TRIM(ri.adjustment_reason), ''), r.remark) AS reason,
+               u.staff_id AS by_staff,
+               r.request_no AS request_no,
+               r.requester_id AS owner_id
+        FROM request_items ri
+        JOIN requests r ON r.id = ri.request_id
+        LEFT JOIN products p ON p.code = ri.product_code
+        LEFT JOIN warehouses w ON w.code = ri.warehouse_code
+        LEFT JOIN warehouses fw ON fw.code = ri.from_warehouse_code
+        LEFT JOIN warehouses tw ON tw.code = ri.to_warehouse_code
+        LEFT JOIN users u ON u.id = r.requester_id
+        WHERE r.status = 'APPROVED'
+          AND r.request_type IN ('STOCK_IN', 'STOCK_OUT', 'STOCK_TRANSFER')
+      )`;
+    const where = `WHERE ($1::text IS NULL OR h.kind = $1)
+                     AND ($2::uuid IS NULL OR h.product_id = $2::uuid)
+                     AND ($3::uuid IS NULL OR h.owner_id = $3::uuid)`;
+    const ownerId = opts.userId ?? null;
+
+    const [rows, counted] = await Promise.all([
+      this.dataSource.query(
+        `${base}
+         SELECT * FROM h ${where}
+         ORDER BY h.at DESC, h.id
+         LIMIT $4 OFFSET $5`,
+        [kind, productId, ownerId, limit, (page - 1) * limit],
+      ),
+      this.dataSource.query(
+        `${base} SELECT COUNT(*)::int AS total FROM h ${where}`,
+        [kind, productId, ownerId],
+      ),
+    ]);
+    const total = Number(counted?.[0]?.total ?? 0);
+
+    return {
+      data: rows.map((r: any) => ({
+        id: r.id,
+        kind: r.kind,
+        at: r.at,
+        productId: r.product_id,
+        productCode: r.product_code,
+        productName: r.product_name,
+        variantName: r.variant_name,
+        fromWarehouse: r.from_warehouse,
+        toWarehouse: r.to_warehouse,
+        quantity: Number(r.quantity),
+        reason: r.reason,
+        byStaff: r.by_staff,
+        requestNo: r.request_no,
+      })),
+      total,
+      page,
+      limit,
+      hasNextPage: page * limit < total,
+    };
   }
 
   /**

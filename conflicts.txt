@@ -1,0 +1,701 @@
+diff --cc src/categories/categories.controller.ts
+index 59a2ddb,de2c6b1..0000000
+--- a/src/categories/categories.controller.ts
++++ b/src/categories/categories.controller.ts
+@@@ -14,7 -14,7 +14,11 @@@ import { CategoriesService } from './ca
+  import { CreateCategoryDto } from './dto/create-category.dto';
+  import { UpdateCategoryDto } from './dto/update-category.dto';
+  import { PaginationDto } from '../common/pagination';
+++<<<<<<< HEAD
+ +import { RequirePermission } from '../auth/decorators/permission.decorator';
+++=======
++ import { Public } from '../auth/decorators/public.decorator';
+++>>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
+  
+  @Controller('categories')
+  export class CategoriesController {
+@@@ -26,13 -25,13 +30,21 @@@
+      return this.categoriesService.create(createCategoryDto);
+    }
+  
+++<<<<<<< HEAD
+ +  @RequirePermission('CATEGORY_VIEW')
+++=======
++   @Public()
+++>>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
+    @Get()
+    findAll(@Query() query: PaginationDto) {
+      return this.categoriesService.findAll(query);
+    }
+  
+++<<<<<<< HEAD
+ +  @RequirePermission('CATEGORY_VIEW')
+++=======
++   @Public()
+++>>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
+    @Get(':id')
+    findOne(@Param('id') id: string) {
+      return this.categoriesService.findOne(id);
+diff --cc src/common/cloudinary/cloudinary-storage.ts
+index b5b6461,6b7534b..0000000
+--- a/src/common/cloudinary/cloudinary-storage.ts
++++ b/src/common/cloudinary/cloudinary-storage.ts
+@@@ -1,78 -1,18 +1,96 @@@
+ +import { BadGatewayException, BadRequestException } from '@nestjs/common';
+  import { CloudinaryStorage } from 'multer-storage-cloudinary';
+ -import cloudinary from './cloudinary.config';
+ +import type { Request } from 'express';
+ +import type { StorageEngine } from 'multer';
+ +import cloudinary, { isCloudinaryConfigured } from './cloudinary.config';
+  
+++<<<<<<< HEAD
+ +const ALLOWED_MIME = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+ +const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
+ +
+ +function createStorage(folder: string): StorageEngine {
+ +  const inner = new CloudinaryStorage({
+ +    cloudinary,
+ +    params: async () => ({
+ +      folder,
+ +      allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+ +    }),
+ +  });
+ +
+ +  // Wrap the engine so Cloudinary failures become readable HTTP errors
+ +  // (instead of an opaque "Internal server error") and are logged.
+ +  return {
+ +    _handleFile(req, file, cb) {
+ +      if (!isCloudinaryConfigured) {
+ +        return cb(
+ +          new BadGatewayException(
+ +            'Image upload is not configured on the server (missing Cloudinary keys in .env).',
+ +          ),
+ +        );
+ +      }
+ +      inner._handleFile(req, file, (err, info) => {
+ +        if (err) {
+ +          const e = err as any;
+ +          const detail = e?.message ?? e?.error?.message ?? String(e);
+ +          // eslint-disable-next-line no-console
+ +          console.error('[Cloudinary] upload failed:', e);
+ +          return cb(
+ +            new BadGatewayException(`Image upload failed: ${detail}`),
+ +          );
+ +        }
+ +        cb(null, info);
+ +      });
+ +    },
+ +    _removeFile(req, file, cb) {
+ +      inner._removeFile(req, file, cb);
+ +    },
+ +  };
+ +}
+ +
+ +export const productStorage = createStorage('stock-management/products');
+ +export const variantStorage = createStorage(
+ +  'stock-management/product-variants',
+ +);
+ +
+ +/** Multer options shared by every endpoint that accepts product images. */
+ +export const imageUploadOptions = {
+ +  storage: productStorage,
+ +  limits: { fileSize: MAX_IMAGE_BYTES },
+ +  fileFilter: (
+ +    _req: Request,
+ +    file: Express.Multer.File,
+ +    cb: (error: Error | null, acceptFile: boolean) => void,
+ +  ) => {
+ +    // Some clients send `application/octet-stream` for a perfectly good
+ +    // image; Cloudinary still validates the real content (allowed_formats),
+ +    // so only reject types we know are unsupported.
+ +    const mime = (file.mimetype || '').toLowerCase();
+ +    const looksGeneric = !mime || mime === 'application/octet-stream';
+ +    if (!looksGeneric && !ALLOWED_MIME.includes(mime)) {
+ +      return cb(
+ +        new BadRequestException(
+ +          `Unsupported image type "${mime}" (${file.originalname}). Only JPG, PNG or WEBP are allowed.`,
+ +        ),
+ +        false,
+ +      );
+ +    }
+ +    cb(null, true);
+ +  },
+ +};
+++=======
++ export const productStorage = new CloudinaryStorage({
++   cloudinary,
++   params: () => ({
++     folder: 'stock-management/products',
++     allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
++   }),
++ });
++ 
++ export const variantStorage = new CloudinaryStorage({
++   cloudinary,
++   params: () => ({
++     folder: 'stock-management/product-variants',
++     allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
++   }),
++ });
+++>>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
+diff --cc src/products/products.controller.ts
+index 9b561c6,5485a01..0000000
+--- a/src/products/products.controller.ts
++++ b/src/products/products.controller.ts
+@@@ -20,11 -19,16 +20,16 @@@ import * as authenticatedUserInterface 
+  
+  import { ProductsService } from './products.service';
+  import { ProductsExcelService } from './products-excel.service';
+- import { PaginationDto } from '../common/pagination';
++ import { BarcodesService } from '../barcodes/barcodes.service';
++ import {
++   GenerateBarcodeQueryDto,
++   GenerateQrQueryDto,
++   LabelQueryDto,
++ } from '../barcodes/dto/barcode-query.dto';
+  import { ProductFilterDto } from './dto/product-filter.dto';
+ -import { RequireRoles } from '../auth/decorators/roles.decorator';
+ +import { RequirePermission } from '../auth/decorators/permission.decorator';
+  import { Public } from '../auth/decorators/public.decorator';
+ -import { productStorage } from '../common/cloudinary/cloudinary-storage';
+ +import { imageUploadOptions } from '../common/cloudinary/cloudinary-storage';
+  
+  @Controller('products')
+  export class ProductsController {
+@@@ -37,64 -42,23 +43,25 @@@
+     * Direct product creation for ADMIN and SUPER_ADMIN (no approvers required).
+     */
+    @Post()
+ -  @RequireRoles('ADMIN', 'SUPER_ADMIN')
+ +  @RequirePermission('PRODUCT_CREATE')
+    @UseInterceptors(
+ -    AnyFilesInterceptor({
+ -      storage: productStorage,
+ -    }),
+ +    AnyFilesInterceptor(imageUploadOptions),
+    )
+-   async create(
++   create(
+      @Body() body: any,
+      @UploadedFiles() files: Express.Multer.File[],
+      @Req() req: authenticatedUserInterface.AuthenticatedRequest,
+    ) {
+-     const parseField = (field: any) => {
+-       if (typeof field === 'string') {
+-         try {
+-           return JSON.parse(field);
+-         } catch {
+-           return field;
+-         }
+-       }
+-       return field;
+-     };
+- 
+-     const product =
+-       parseField(body.product) ?? (body.productCode ? body : undefined);
+-     const variants = parseField(body.variants);
+-     const stock = parseField(body.stock);
+- 
+-     const dto = {
+-       product,
+-       variants,
+-       stock,
+-       remark: body.remark ?? null,
+-     };
+- 
+-     let productImageUrl: string | undefined;
+-     const variantImageUrls: Record<string, string> = {};
+- 
+-     for (const file of files ?? []) {
+-       if (file.fieldname === 'image') {
+-         productImageUrl = file.path;
+-         continue;
+-       }
+- 
+-       const match = file.fieldname.match(/^variantImage\[(.+)\]$/);
+-       if (match) {
+-         variantImageUrls[match[1]] = file.path;
+-       }
+-     }
+- 
+-     return this.productsService.createDirect(
+-       dto,
+-       req.user.sub,
+-       productImageUrl,
+-       variantImageUrls,
+-     );
++     return this.productsService.createFromMultipart(body, files, req.user.sub);
+    }
+  
+++<<<<<<< HEAD
+ +  @RequirePermission('PRODUCT_VIEW')
+++=======
++   @Public()
+++>>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
+    @Get()
+-   async findAll(@Query() query: ProductFilterDto) {
++   findAll(@Query() query: ProductFilterDto) {
+      return this.productsService.findAll(query);
+    }
+  
+@@@ -139,38 -102,12 +106,38 @@@
+    }
+  
+    /**
+ -   * Import products directly from Excel (Admin & Super Admin only).
+ +   * Import products directly from Excel (PRODUCT_IMPORT: Admin, Manager,
+ +   * Super Admin). Separate from PRODUCT_CREATE so that giving a role the
+ +   * import does not also switch its Add Product form from "send a request"
+ +   * to "save directly".
+     */
+ +  @Post('import/preview')
+ +  @RequirePermission('PRODUCT_IMPORT')
+ +  @UseInterceptors(FileInterceptor('file'))
+ +  async previewImport(@UploadedFile() file: Express.Multer.File) {
+ +    // Never throws for problems in the file: they come back as a list so the
+ +    // review screen can show every one of them.
+ +    try {
+ +      const batchItems = this.productsExcelService.importExcel(file);
+ +      return await this.productsService.previewManyDirect(batchItems);
+ +    } catch (e) {
+ +      if (e instanceof BadRequestException) {
+ +        const body = e.getResponse() as any;
+ +        const message =
+ +          typeof body === 'string' ? body : String(body?.message ?? e.message);
+ +        const errors: string[] = Array.isArray(body?.errors)
+ +          ? body.errors.map(String)
+ +          : [message];
+ +        return { ok: false, message, errors };
+ +      }
+ +      throw e;
+ +    }
+ +  }
+ +
+    @Post('import')
+ -  @RequireRoles('ADMIN', 'SUPER_ADMIN')
+ +  @RequirePermission('PRODUCT_IMPORT')
+    @UseInterceptors(FileInterceptor('file'))
+-   async importExcel(
++   importExcel(
+      @UploadedFile() file: Express.Multer.File,
+      @Req() req: authenticatedUserInterface.AuthenticatedRequest,
+    ) {
+@@@ -178,55 -115,68 +145,103 @@@
+      return this.productsService.createManyDirect(batchItems, req.user.sub);
+    }
+  
+++<<<<<<< HEAD
+ +  /**
+ +   * Scanner lookup: exact match on product/variant code, SKU or barcode.
+ +   * Must stay above `:id` so "by-code" is not treated as an id.
+ +   */
+ +  @RequirePermission('PRODUCT_VIEW')
+ +  @Get('by-code/:code')
+ +  async findByCode(@Param('code') code: string) {
+ +    return this.productsService.findByCode(code);
+ +  }
+ +
+ +  @RequirePermission('PRODUCT_VIEW')
+++=======
++   @Public()
+++>>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
+    @Get(':id')
+-   async findOne(@Param('id') id: string) {
++   findOne(@Param('id') id: string) {
+      return this.productsService.findOne(id);
+    }
+  
+ +  /**
+ +   * Change the photo of an existing product (multipart field "image").
+ +   * Own permission (PRODUCT_IMAGE: Admin, Manager) so Manager can fix photos
+ +   * without PRODUCT_UPDATE (which also (de)activates products).
+ +   */
+ +  @RequirePermission('PRODUCT_IMAGE')
+ +  @Post(':id/image')
+ +  @UseInterceptors(FileInterceptor('image', imageUploadOptions))
+ +  async updateImage(
+ +    @Param('id') id: string,
+ +    @UploadedFile() file: Express.Multer.File,
+ +  ) {
+ +    if (!file?.path) {
+ +      throw new BadRequestException('Image file is required (field "image")');
+ +    }
+ +    return this.productsService.updateImage(id, file.path);
+ +  }
+ +
+ +  @RequirePermission('PRODUCT_DELETE')
+    @Delete(':id')
+-   async remove(@Param('id') id: string) {
++   remove(@Param('id') id: string) {
+      return this.productsService.remove(id);
+    }
+  
+ +  @RequirePermission('PRODUCT_UPDATE')
+    @Patch(':id/deactivate')
+-   async deactivate(@Param('id') id: string) {
++   deactivate(@Param('id') id: string) {
+      return this.productsService.deactivate(id);
+    }
+  
+ +  @RequirePermission('PRODUCT_UPDATE')
+    @Patch(':id/activate')
+-   async activate(@Param('id') id: string) {
++   activate(@Param('id') id: string) {
+      return this.productsService.activate(id);
+    }
++ 
++   /**
++    * Fast Barcode / SKU / QR Scanner Lookup.
++    */
++   @Get('lookup/barcode/:code')
++   lookupByBarcode(@Param('code') code: string) {
++     return this.barcodesService.lookupByBarcode(code);
++   }
++ 
++   /**
++    * Stream 1D Barcode image (PNG or SVG) for this Product.
++    */
++   @Get(':id/barcode')
++   getBarcode(
++     @Param('id') id: string,
++     @Query() query: Partial<GenerateBarcodeQueryDto>,
++     @Res() res: Response,
++   ) {
++     return this.barcodesService.streamProductBarcode(id, query, res);
++   }
++ 
++   /**
++    * Stream 2D QR Code image (PNG or SVG) for this Product.
++    */
++   @Get(':id/qrcode')
++   getQrCode(
++     @Param('id') id: string,
++     @Query() query: Partial<GenerateQrQueryDto>,
++     @Res() res: Response,
++   ) {
++     return this.barcodesService.streamProductQr(id, query, res);
++   }
++ 
++   /**
++    * Stream printable thermal sticker PDF label for this Product.
++    */
++   @Get(':id/label')
++   getLabel(
++     @Param('id') id: string,
++     @Query() query: LabelQueryDto,
++     @Res() res: Response,
++   ) {
++     return this.barcodesService.streamProductLabel(id, query, res);
++   }
+  }
+diff --cc src/products/products.service.ts
+index 65c3c0b,1f7c853..0000000
+--- a/src/products/products.service.ts
++++ b/src/products/products.service.ts
+@@@ -508,8 -365,11 +571,16 @@@ export class ProductsService 
+      const hasVariants =
+        productData.hasVariants === true || productData.hasVariants === 'true';
+      const unit = productData.unit;
+++<<<<<<< HEAD
+ +    let sku: string | undefined = productData.productSku ?? productData.sku;
+ +    const barcode = productData.productBarcode ?? productData.barcode ?? null;
+++=======
++     const sku = productData.productSku ?? productData.sku;
++     let barcode = productData.productBarcode ?? productData.barcode ?? null;
++     if (!barcode || (typeof barcode === 'string' && !barcode.trim())) {
++       barcode = await this.barcodesService.generateUniqueBarcode();
++     }
+++>>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
+      const costPrice = Number(
+        productData.productCostPrice ?? productData.costPrice ?? 0,
+      );
+@@@ -653,11 -498,13 +724,19 @@@
+  
+      const savedVariants: ProductVariant[] = [];
+      for (const v of variantDtos) {
+ -      const vCode = v.variantCode ?? v.code;
+ +      const vCode =
+ +        v.variantCode ?? v.code ?? `${code}-V${savedVariants.length + 1}`;
+        const vName = v.variantName ?? v.name;
+++<<<<<<< HEAD
+ +      const vSku = v.variantSku ?? v.sku ?? `${sku}-V${savedVariants.length + 1}`;
+ +      const vBarcode = v.variantBarcode ?? v.barcode ?? null;
+++=======
++       const vSku = v.variantSku ?? v.sku;
++       let vBarcode = v.variantBarcode ?? v.barcode ?? null;
++       if (!vBarcode || (typeof vBarcode === 'string' && !vBarcode.trim())) {
++         vBarcode = await this.barcodesService.generateUniqueBarcode();
++       }
+++>>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
+        const vAttributes = v.variantAttributes ?? v.attributes ?? null;
+        const vCostPrice =
+          v.variantCostPrice !== undefined &&
+diff --cc src/requests/requests.controller.ts
+index a00f18c,a2842d3..0000000
+--- a/src/requests/requests.controller.ts
++++ b/src/requests/requests.controller.ts
+@@@ -15,33 -15,17 +15,23 @@@ import * as authenticatedUserInterface 
+  import type { Response } from 'express';
+  import { AnyFilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
+  
+- import { RequestsExcelService } from './requests-excel.service';
+- import { RequestImportTemplateService } from './request-import-template.service';
+  import { RequestsService } from './requests.service';
+- 
+  import { RequestType } from './enum/request-type.enum';
+- import { RequestSource } from './enum/request-source.enum';
+- 
+- import { CreateRequestDto } from './dto/create-request.dto';
+- 
+  import { Public } from '../auth/decorators/public.decorator';
+++<<<<<<< HEAD
+ +import { imageUploadOptions } from '../common/cloudinary/cloudinary-storage';
+ +import { RequirePermission } from '../auth/decorators/permission.decorator';
+++=======
++ import { productStorage } from '../common/cloudinary/cloudinary-storage';
+++>>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
+  import { CommitRequestDto } from './dto/commit-request.dto';
+  import { PaginationDto } from '../common/pagination';
+  
+  @Controller('requests')
+  export class RequestsController {
+-   constructor(
+-     private readonly requestsExcelService: RequestsExcelService,
+- 
+-     private readonly requestImportTemplateService: RequestImportTemplateService,
+- 
+-     private readonly requestsService: RequestsService,
+-   ) {}
++   constructor(private readonly requestsService: RequestsService) {}
+  
+ +  @RequirePermission('REQUEST_VIEW')
+    @Get()
+    findAll(
+      @Req() req: authenticatedUserInterface.AuthenticatedRequest,
+@@@ -50,21 -34,8 +40,21 @@@
+      return this.requestsService.findAll(req.user.sub, query);
+    }
+  
+ +  /**
+ +   * Users the requester may add as certifier/approver (STAFF cannot use /users).
+ +   * Must stay above `:id`.
+ +   */
+ +  @RequirePermission('REQUEST_CREATE')
+ +  @Get('approver-candidates')
+ +  findApproverCandidates(
+ +    @Req() req: authenticatedUserInterface.AuthenticatedRequest,
+ +  ) {
+ +    return this.requestsService.findApproverCandidates(req.user.sub);
+ +  }
+ +
+ +  @RequirePermission('REQUEST_VIEW')
+    @Get(':id')
+-   async findOne(
++   findOne(
+      @Param('id') id: string,
+      @Req() req: authenticatedUserInterface.AuthenticatedRequest,
+    ) {
+@@@ -87,135 -56,52 +75,70 @@@
+      res.set({
+        'Content-Type':
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+- 
+        'Content-Disposition': `attachment; filename="${requestType}.xlsx"`,
+- 
+-       'Content-Length': file.length,
++       'Content-Length': file.length.toString(),
+      });
+  
+-     res.send(file);
++     return res.send(file);
+    }
+  
+++<<<<<<< HEAD
+ +  // =====================================================
+ +  // MANUAL CREATE
+ +  // =====================================================
+ +
+ +  @RequirePermission('REQUEST_CREATE')
+++=======
++   /**
++    * Create a new request manually with multipart form-data.
++    */
+++>>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
+    @Post()
+    @UseInterceptors(
+ -    AnyFilesInterceptor({
+ -      storage: productStorage,
+ -    }),
+ +    AnyFilesInterceptor(imageUploadOptions),
+    )
+    create(
+      @Body() body: any,
+- 
+-     @UploadedFiles()
+-     files: Express.Multer.File[],
+- 
+-     @Req()
+-     req: authenticatedUserInterface.AuthenticatedRequest,
++     @UploadedFiles() files: Express.Multer.File[],
++     @Req() req: authenticatedUserInterface.AuthenticatedRequest,
+    ) {
+-     const parseJson = (val: any) => {
+-       if (typeof val === 'string') {
+-         try {
+-           return JSON.parse(val);
+-         } catch {
+-           return val;
+-         }
+-       }
+-       return val;
+-     };
+- 
+-     const createRequestDto: CreateRequestDto = {
+-       requestType: body.requestType ?? body.type,
+- 
+-       product: body.product ? parseJson(body.product) : undefined,
+- 
+-       variants: body.variants ? parseJson(body.variants) : undefined,
+- 
+-       stock: body.stock ? parseJson(body.stock) : undefined,
+- 
+-       adjustments: body.adjustments ? parseJson(body.adjustments) : undefined,
+- 
+-       approvers: body.approvers ? parseJson(body.approvers) : [],
+- 
+-       remark: body.remark ?? null,
+-     };
+- 
+-     // Product image
+-     let productImageUrl: string | undefined;
+- 
+-     // Variant images
+-     const variantImageUrls: Record<string, string> = {};
+- 
+-     for (const file of files ?? []) {
+-       // Product image
+-       if (file.fieldname === 'image') {
+-         productImageUrl = file.path;
+-         continue;
+-       }
+- 
+-       // Variant image
+-       const match = file.fieldname.match(/^variantImage\[(.+)\]$/);
+- 
+-       if (match) {
+-         const variantCode = match[1];
+- 
+-         variantImageUrls[variantCode] = file.path;
+-       }
+-     }
+- 
+-     return this.requestsService.create(
+-       createRequestDto,
+-       req.user.sub,
+-       RequestSource.MANUAL,
+-       productImageUrl,
+-       variantImageUrls,
+-     );
++     return this.requestsService.createFromMultipart(body, files, req.user.sub);
+    }
+  
+++<<<<<<< HEAD
+ +  // =====================================================
+ +  // EXCEL IMPORT
+ +  // =====================================================
+ +
+ +  @RequirePermission('REQUEST_CREATE')
+++=======
++   /**
++    * Bulk import a request from an Excel file.
++    */
+++>>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
+    @Post('import')
+    @UseInterceptors(FileInterceptor('file'))
+    importExcel(
+-     @UploadedFile()
+-     file: Express.Multer.File,
+- 
+-     @Body('requestType')
+-     requestType: RequestType,
+- 
+-     @Body('approvers')
+-     approversRaw: any,
+- 
+-     @Req()
+-     req: authenticatedUserInterface.AuthenticatedRequest,
++     @UploadedFile() file: Express.Multer.File,
++     @Body('requestType') requestType: RequestType,
++     @Body('approvers') approversRaw: any,
++     @Req() req: authenticatedUserInterface.AuthenticatedRequest,
+    ) {
+-     // ---------------------------------------------
+-     // Excel → CreateRequestDto
+-     // ---------------------------------------------
+- 
+-     const dto = this.requestsExcelService.importExcel(file, requestType);
+- 
+-     if (approversRaw) {
+-       try {
+-         dto.approvers =
+-           typeof approversRaw === 'string'
+-             ? JSON.parse(approversRaw)
+-             : approversRaw;
+-       } catch {}
+-     }
+- 
+-     // ---------------------------------------------
+-     // Create request using SAME business logic
+-     // ---------------------------------------------
+- 
+-     return this.requestsService.create(dto, req.user.sub, RequestSource.EXCEL);
++     return this.requestsService.importFromExcel(
++       file,
++       requestType,
++       approversRaw,
++       req.user.sub,
++     );
+    }
+  
+++<<<<<<< HEAD
+ +  @RequirePermission('REQUEST_VIEW')
+++=======
++   /**
++    * Commit, approve, or reject a request.
++    */
+++>>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
+    @Post(':id/commit')
+    commit(
+      @Param('id') requestId: string,
+diff --cc src/requests/requests.service.ts
+index 39aab02,c2a64e7..0000000
+--- a/src/requests/requests.service.ts
++++ b/src/requests/requests.service.ts
+@@@ -2036,8 -1885,8 +2108,13 @@@ export class RequestsService 
+        hasVariants: item.hasVariants,
+        unit: item.unit,
+  
+++<<<<<<< HEAD
+ +      sku: productSku,
+ +      barcode: item.productBarcode,
+++=======
++       sku: item.productSku,
++       barcode,
+++>>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
+  
+        costPrice: item.productCostPrice ?? 0,
+        sellingPrice: item.productSellingPrice ?? 0,
+@@@ -2116,8 -1959,8 +2198,13 @@@
+          code: item.variantCode!,
+          name: item.variantName ?? '',
+  
+++<<<<<<< HEAD
+ +        sku: variantSku,
+ +        barcode: item.variantBarcode,
+++=======
++         sku: item.variantSku!,
++         barcode: vBarcode,
+++>>>>>>> f3cc2470de2f82d39b4ab61423685eb4c71b17a5
+  
+          attributes: item.variantAttributes,
+          image: item.variantImage,
