@@ -629,6 +629,8 @@ export class TelegramAuthService {
     const qb = this.customerRepo
       .createQueryBuilder('customer')
       .leftJoinAndSelect('customer.telegramAccounts', 'telegramAccounts')
+      .leftJoinAndSelect('customer.loyaltyTier', 'loyaltyTier')
+      .leftJoinAndSelect('customer.manualTierOverride', 'manualTierOverride')
       .orderBy('customer.createdAt', 'DESC');
 
     if (query.status) {

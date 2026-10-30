@@ -12,6 +12,7 @@ import { Customer } from './customer.entity';
 import { CustomerOrderItem } from './customer-order-item.entity';
 import { CustomerOrderMessage } from './customer-order-message.entity';
 import { CustomerOrderPayment } from './customer-order-payment.entity';
+import { CustomerOrderRefund } from './customer-order-refund.entity';
 import { User } from '../../users/entities/user.entity';
 import { CustomerOrderStatus } from '../enums/customer-order-status.enum';
 import { OrderSource } from '../enums/order-source.enum';
@@ -216,6 +217,63 @@ export class CustomerOrder {
     name: 'updated_at',
   })
   updatedAt: Date;
+
+
+  @Column({
+    name: 'subtotal_amount',
+    type: 'decimal',
+    precision: 15,
+    scale: 2,
+    default: 0,
+  })
+  subtotalAmount: number;
+
+  @Column({
+    name: 'loyalty_discount_percent',
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    default: 0,
+  })
+  loyaltyDiscountPercent: number;
+
+  @Column({
+    name: 'loyalty_discount_amount',
+    type: 'decimal',
+    precision: 15,
+    scale: 2,
+    default: 0,
+  })
+  loyaltyDiscountAmount: number;
+
+  @Column({
+    name: 'loyalty_tier_id',
+    type: 'uuid',
+    nullable: true,
+  })
+  loyaltyTierId: string | null;
+
+  @Column({
+    name: 'loyalty_tier_name',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
+  loyaltyTierName: string | null;
+
+  @Column({
+    name: 'refunded_amount',
+    type: 'decimal',
+    precision: 15,
+    scale: 2,
+    default: 0,
+  })
+  refundedAmount: number;
+
+  @OneToMany(() => CustomerOrderRefund, (refund) => refund.order, {
+    cascade: true,
+  })
+  refunds: CustomerOrderRefund[];
 
   @OneToMany(() => CustomerOrderItem, (item) => item.order, {
     cascade: true,

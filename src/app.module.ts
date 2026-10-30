@@ -26,6 +26,7 @@ import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
 import { ReportsModule } from './reports/reports.module';
 import { BarcodesModule } from './barcodes/barcodes.module';
 import { CustomerOrdersModule } from './customer-orders/customer-orders.module';
+import { LoyaltyModule } from './loyalty/loyalty.module';
 import { HealthModule } from './health/health.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 

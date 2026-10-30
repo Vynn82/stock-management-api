@@ -15,6 +15,7 @@ import { Stock } from '../stock/entities/stock.entity';
 import { Warehouse } from '../warehouses/entities/warehouse.entity';
 import { TelegramBotService } from './telegram/telegram-bot.service';
 import { TelegramAuthService } from './telegram/telegram-auth.service';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 import { MailsService } from '../mails/mails.service';
 import { CustomerOrderStatus } from './enums/customer-order-status.enum';
 import { CustomerStatus } from './enums/customer-status.enum';
@@ -128,6 +129,34 @@ describe('CustomerOrdersService Business Invariant Tests', () => {
         { provide: TelegramBotService, useValue: telegramBotService },
         { provide: TelegramAuthService, useValue: telegramAuthService },
         { provide: MailsService, useValue: mailsService },
+        {
+          provide: LoyaltyService,
+          useValue: {
+            calculateOrderLoyaltyDiscount: jest.fn().mockImplementation((customerId, items) => {
+              const subtotal = items.reduce((sum, i) => sum + (i.quantity * 10), 0);
+              return Promise.resolve({
+                tierId: null,
+                tierName: null,
+                loyaltyDiscountPercent: 0,
+                subtotalAmount: subtotal,
+                loyaltyDiscountAmount: 0,
+                totalAmount: subtotal,
+                items: items.map((i) => ({
+                  productId: i.productId,
+                  variantId: i.variantId,
+                  quantity: i.quantity,
+                  originalUnitPrice: 10,
+                  unitPrice: 10,
+                  discountPercent: 0,
+                  discountAmount: 0,
+                  isExcluded: false,
+                  subtotal: i.quantity * 10,
+                })),
+              });
+            }),
+            calculateCustomerLoyalty: jest.fn().mockResolvedValue({}),
+          },
+        },
       ],
     }).compile();
 

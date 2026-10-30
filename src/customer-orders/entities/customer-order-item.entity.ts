@@ -128,6 +128,59 @@ export class CustomerOrderItem {
   })
   status: string;
 
+  @Column({
+    name: 'original_unit_price',
+    type: 'decimal',
+    precision: 15,
+    scale: 2,
+    nullable: true,
+  })
+  originalUnitPrice: number | null;
+
+  @Column({
+    name: 'discount_percent',
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    default: 0,
+  })
+  discountPercent: number;
+
+  @Column({
+    name: 'discount_amount',
+    type: 'decimal',
+    precision: 15,
+    scale: 2,
+    default: 0,
+  })
+  discountAmount: number;
+
+  @Column({
+    name: 'is_discount_excluded',
+    type: 'boolean',
+    default: false,
+  })
+  isDiscountExcluded: boolean;
+
+  @Column({
+    name: 'refunded_quantity',
+    type: 'decimal',
+    precision: 15,
+    scale: 3,
+    default: 0,
+  })
+  refundedQuantity: number;
+
+  @Column({
+    name: 'refunded_amount',
+    type: 'decimal',
+    precision: 15,
+    scale: 2,
+    default: 0,
+  })
+  refundedAmount: number;
+
+
   @CreateDateColumn({
     name: 'created_at',
   })

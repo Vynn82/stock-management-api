@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -9,11 +9,13 @@ import { CustomerOrder } from './entities/customer-order.entity';
 import { CustomerOrderItem } from './entities/customer-order-item.entity';
 import { CustomerOrderMessage } from './entities/customer-order-message.entity';
 import { CustomerOrderPayment } from './entities/customer-order-payment.entity';
+import { CustomerOrderRefund } from './entities/customer-order-refund.entity';
 import { Product } from '../products/entities/product.entity';
 import { ProductVariant } from '../product-variants/entities/product-variant.entity';
 import { Stock } from '../stock/entities/stock.entity';
 import { Warehouse } from '../warehouses/entities/warehouse.entity';
 import { MailsModule } from '../mails/mails.module';
+import { LoyaltyModule } from '../loyalty/loyalty.module';
 
 import { CustomerOrdersService } from './customer-orders.service';
 import { CustomerOrdersController } from './customer-orders.controller';
@@ -32,6 +34,7 @@ import { CustomerJwtGuard } from './guards/customer-jwt.guard';
       CustomerOrderItem,
       CustomerOrderMessage,
       CustomerOrderPayment,
+      CustomerOrderRefund,
       Product,
       ProductVariant,
       Stock,
@@ -48,6 +51,7 @@ import { CustomerJwtGuard } from './guards/customer-jwt.guard';
       }),
     }),
     MailsModule,
+    forwardRef(() => LoyaltyModule),
   ],
   controllers: [
     CustomerOrdersController,

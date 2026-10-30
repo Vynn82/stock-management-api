@@ -7,6 +7,8 @@ export enum DeliveryStatus {
 export enum PaymentStatus {
   UNPAID = 'UNPAID',
   PAID = 'PAID',
+  PARTIALLY_REFUNDED = 'PARTIALLY_REFUNDED',
+  REFUNDED = 'REFUNDED',
 }
 
 export enum PaymentMethod {

@@ -2,6 +2,8 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
+  ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
@@ -9,6 +11,7 @@ import {
 import { CustomerOrder } from './customer-order.entity';
 import { CustomerTelegramAccount } from './customer-telegram-account.entity';
 import { CustomerStatus } from '../enums/customer-status.enum';
+import { LoyaltyTier } from '../../loyalty/entities/loyalty-tier.entity';
 
 @Entity('customers')
 export class Customer {
@@ -142,6 +145,78 @@ export class Customer {
     default: true,
   })
   isActive: boolean;
+
+
+  @Column({
+    name: 'loyalty_tier_id',
+    type: 'uuid',
+    nullable: true,
+  })
+  loyaltyTierId: string | null;
+
+  @ManyToOne(() => LoyaltyTier, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
+  @JoinColumn({
+    name: 'loyalty_tier_id',
+  })
+  loyaltyTier: LoyaltyTier | null;
+
+  @Column({
+    name: 'manual_tier_override_id',
+    type: 'uuid',
+    nullable: true,
+  })
+  manualTierOverrideId: string | null;
+
+  @ManyToOne(() => LoyaltyTier, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
+  @JoinColumn({
+    name: 'manual_tier_override_id',
+  })
+  manualTierOverride: LoyaltyTier | null;
+
+  @Column({
+    name: 'tier_override_expiry',
+    type: 'timestamp',
+    nullable: true,
+  })
+  tierOverrideExpiry: Date | null;
+
+  @Column({
+    name: 'tier_override_notes',
+    type: 'text',
+    nullable: true,
+  })
+  tierOverrideNotes: string | null;
+
+  @Column({
+    name: 'lifetime_spending',
+    type: 'decimal',
+    precision: 15,
+    scale: 2,
+    default: 0,
+  })
+  lifetimeSpending: number;
+
+  @Column({
+    name: 'completed_orders_count',
+    type: 'int',
+    default: 0,
+  })
+  completedOrdersCount: number;
+
+  @Column({
+    name: 'total_quantity_purchased',
+    type: 'decimal',
+    precision: 15,
+    scale: 3,
+    default: 0,
+  })
+  totalQuantityPurchased: number;
 
   @CreateDateColumn({
     name: 'created_at',
