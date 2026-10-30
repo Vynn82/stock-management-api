@@ -12,7 +12,6 @@ import {
 import { Customer } from '../customer-orders/entities/customer.entity';
 import { CustomerOrder } from '../customer-orders/entities/customer-order.entity';
 import { CustomerOrderItem } from '../customer-orders/entities/customer-order-item.entity';
-import { CustomerOrderRefund, RefundType } from '../customer-orders/entities/customer-order-refund.entity';
 import { Product } from '../products/entities/product.entity';
 import { ProductVariant } from '../product-variants/entities/product-variant.entity';
 import { Category } from '../categories/entities/category.entity';
@@ -25,7 +24,6 @@ describe('LoyaltyService Unit Tests', () => {
   let customerRepo: any;
   let orderRepo: any;
   let itemRepo: any;
-  let refundRepo: any;
   let productRepo: any;
   let variantRepo: any;
   let categoryRepo: any;
@@ -114,7 +112,6 @@ describe('LoyaltyService Unit Tests', () => {
     };
 
     itemRepo = {};
-    refundRepo = {};
 
     productRepo = {
       findOne: jest.fn(),
@@ -135,7 +132,6 @@ describe('LoyaltyService Unit Tests', () => {
         { provide: getRepositoryToken(Customer), useValue: customerRepo },
         { provide: getRepositoryToken(CustomerOrder), useValue: orderRepo },
         { provide: getRepositoryToken(CustomerOrderItem), useValue: itemRepo },
-        { provide: getRepositoryToken(CustomerOrderRefund), useValue: refundRepo },
         { provide: getRepositoryToken(Product), useValue: productRepo },
         { provide: getRepositoryToken(ProductVariant), useValue: variantRepo },
         { provide: getRepositoryToken(Category), useValue: categoryRepo },
@@ -177,7 +173,6 @@ describe('LoyaltyService Unit Tests', () => {
           loyaltyDiscountAmount: 0,
           createdAt: new Date('2026-01-01'),
           items: [{ productId: 'p1', approvedQuantity: 5, subtotal: 750 }],
-          refunds: [],
         },
         {
           id: 'ord-2',
@@ -186,7 +181,6 @@ describe('LoyaltyService Unit Tests', () => {
           loyaltyDiscountAmount: 0,
           createdAt: new Date('2026-01-15'),
           items: [{ productId: 'p1', approvedQuantity: 5, subtotal: 750 }],
-          refunds: [],
         },
       ]);
 
@@ -216,7 +210,6 @@ describe('LoyaltyService Unit Tests', () => {
           loyaltyDiscountAmount: 0,
           createdAt: new Date('2026-02-01'),
           items: [{ productId: 'p1', approvedQuantity: 10, subtotal: 3000 }],
-          refunds: [],
         },
       ]);
 
@@ -243,7 +236,6 @@ describe('LoyaltyService Unit Tests', () => {
           loyaltyDiscountAmount: 0,
           createdAt: new Date('2026-01-01'),
           items: [{ productId: 'p1', approvedQuantity: 5, subtotal: 1200 }],
-          refunds: [],
         },
         {
           id: 'ord-2',
@@ -252,7 +244,6 @@ describe('LoyaltyService Unit Tests', () => {
           loyaltyDiscountAmount: 0,
           createdAt: new Date('2026-01-10'),
           items: [{ productId: 'p1', approvedQuantity: 5, subtotal: 1100 }],
-          refunds: [],
         },
       ]);
 
@@ -277,7 +268,6 @@ describe('LoyaltyService Unit Tests', () => {
         loyaltyDiscountAmount: 0,
         createdAt: new Date(`2026-0${i + 1}-01`),
         items: [{ productId: 'p1', approvedQuantity: 10, subtotal: 1600 }],
-        refunds: [],
       }));
 
       orderRepo.find.mockResolvedValue(orders);
@@ -290,79 +280,6 @@ describe('LoyaltyService Unit Tests', () => {
     });
   });
 
-  describe('Refund Adjustments and Order Eligibility', () => {
-    it('should adjust spending and reverse completed order count if fully refunded', async () => {
-      customerRepo.findOne.mockResolvedValue({
-        id: 'cust-refund',
-        loyaltyTier: mockTiers.find((t) => t.code === 'NEW'),
-        manualTierOverride: null,
-      });
-
-      // 2 completed orders, but ord-2 was fully refunded
-      orderRepo.find.mockResolvedValue([
-        {
-          id: 'ord-1',
-          totalAmount: 1000,
-          subtotalAmount: 1000,
-          loyaltyDiscountAmount: 0,
-          createdAt: new Date('2026-01-01'),
-          items: [{ productId: 'p1', approvedQuantity: 5, subtotal: 1000 }],
-          refunds: [],
-        },
-        {
-          id: 'ord-2',
-          totalAmount: 1200,
-          subtotalAmount: 1200,
-          loyaltyDiscountAmount: 0,
-          createdAt: new Date('2026-01-10'),
-          items: [{ productId: 'p1', approvedQuantity: 5, subtotal: 1200 }],
-          refunds: [{ amount: 1200, refundType: RefundType.FULL }],
-        },
-      ]);
-
-      const profile = await service.calculateCustomerLoyalty('cust-refund');
-      // Ord-2 is fully refunded, so completedOrderCount = 1 (ord-2 reversed)
-      expect(profile.statistics.completedOrderCount).toBe(1);
-      expect(profile.statistics.lifetimeSpending).toBe(1000);
-      expect(profile.currentTier.code).toBe('NEW');
-    });
-
-    it('should adjust spending for partial refund while keeping order count', async () => {
-      customerRepo.findOne.mockResolvedValue({
-        id: 'cust-partial',
-        loyaltyTier: mockTiers.find((t) => t.code === 'RETURNING'),
-        manualTierOverride: null,
-      });
-
-      // 2 completed orders ($1500 + $1000 = $2500), but ord-2 had $600 refunded ($2500 - $600 = $1900)
-      orderRepo.find.mockResolvedValue([
-        {
-          id: 'ord-1',
-          totalAmount: 1500,
-          subtotalAmount: 1500,
-          loyaltyDiscountAmount: 0,
-          createdAt: new Date('2026-01-01'),
-          items: [{ productId: 'p1', approvedQuantity: 5, subtotal: 1500 }],
-          refunds: [],
-        },
-        {
-          id: 'ord-2',
-          totalAmount: 1000,
-          subtotalAmount: 1000,
-          loyaltyDiscountAmount: 0,
-          createdAt: new Date('2026-01-10'),
-          items: [{ productId: 'p1', approvedQuantity: 5, subtotal: 1000 }],
-          refunds: [{ amount: 600, refundType: RefundType.PARTIAL }],
-        },
-      ]);
-
-      const profile = await service.calculateCustomerLoyalty('cust-partial');
-      expect(profile.statistics.completedOrderCount).toBe(2);
-      expect(profile.statistics.lifetimeSpending).toBe(1900);
-      // Because spending dropped below $2,000, downgraded to NEW under AUTOMATIC downgrade policy
-      expect(profile.currentTier.code).toBe('NEW');
-    });
-  });
 
   describe('Discount Management & Margin Floor', () => {
     it('should apply discount to regular product and exclude excludedProductIds', async () => {

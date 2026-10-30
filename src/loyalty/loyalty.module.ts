@@ -6,7 +6,6 @@ import { LoyaltyConfig } from './entities/loyalty-config.entity';
 import { Customer } from '../customer-orders/entities/customer.entity';
 import { CustomerOrder } from '../customer-orders/entities/customer-order.entity';
 import { CustomerOrderItem } from '../customer-orders/entities/customer-order-item.entity';
-import { CustomerOrderRefund } from '../customer-orders/entities/customer-order-refund.entity';
 import { Product } from '../products/entities/product.entity';
 import { ProductVariant } from '../product-variants/entities/product-variant.entity';
 import { Category } from '../categories/entities/category.entity';
@@ -24,7 +23,6 @@ import { CustomerOrdersModule } from '../customer-orders/customer-orders.module'
       Customer,
       CustomerOrder,
       CustomerOrderItem,
-      CustomerOrderRefund,
       Product,
       ProductVariant,
       Category,

@@ -16,10 +16,6 @@ import {
 import { Customer } from '../customer-orders/entities/customer.entity';
 import { CustomerOrder } from '../customer-orders/entities/customer-order.entity';
 import { CustomerOrderItem } from '../customer-orders/entities/customer-order-item.entity';
-import {
-  CustomerOrderRefund,
-  RefundType,
-} from '../customer-orders/entities/customer-order-refund.entity';
 import { Product } from '../products/entities/product.entity';
 import { ProductVariant } from '../product-variants/entities/product-variant.entity';
 import { Category } from '../categories/entities/category.entity';
@@ -150,8 +146,6 @@ export class LoyaltyService {
     @InjectRepository(CustomerOrderItem)
     private readonly orderItemRepo: Repository<CustomerOrderItem>,
 
-    @InjectRepository(CustomerOrderRefund)
-    private readonly refundRepo: Repository<CustomerOrderRefund>,
 
     @InjectRepository(Product)
     private readonly productRepo: Repository<Product>,
@@ -557,7 +551,7 @@ export class LoyaltyService {
 
   /**
    * Recalculates all purchase tracking statistics and evaluates tier eligibility
-   * for a customer based strictly on completed orders and refunds.
+   * for a customer based strictly on completed orders.
    */
   async calculateCustomerLoyalty(
     customerId: string,
@@ -582,13 +576,13 @@ export class LoyaltyService {
       order: { tierRank: 'DESC' }, // Highest rank first: VIP -> Regular -> Returning -> New
     });
 
-    // 1. Fetch ALL completed orders for this customer (with line items and refunds)
+    // 1. Fetch ALL completed orders for this customer (with line items)
     const completedOrders = await oRepo.find({
       where: {
         customerId,
         status: CustomerOrderStatus.COMPLETED,
       },
-      relations: { items: { product: true, variant: true }, refunds: true },
+      relations: { items: { product: true, variant: true } },
       order: { createdAt: 'ASC' },
     });
 
@@ -603,29 +597,11 @@ export class LoyaltyService {
     const recentDiscountedOrders: CustomerLoyaltyProfile['recentDiscountedOrders'] = [];
 
     for (const order of completedOrders) {
-      // Calculate total refunded amount for this order
-      const orderRefundTotal = (order.refunds || []).reduce(
-        (sum, r) => sum + Number(r.amount || 0),
-        0,
-      );
-
-      // Requirement 4: Exclude fully refunded orders completely from purchase count
-      const isFullyRefunded =
-        orderRefundTotal >= Number(order.totalAmount) && Number(order.totalAmount) > 0;
-
-      if (isFullyRefunded) {
-        continue;
-      }
-
       // Order counts as 1 purchase
       completedOrderCount += 1;
 
-      // Net spending contributed by this order
-      const netOrderSpending = Math.max(
-        0,
-        Number(order.totalAmount) - orderRefundTotal,
-      );
-      lifetimeSpending += netOrderSpending;
+      const orderSpending = Number(order.totalAmount || 0);
+      lifetimeSpending += orderSpending;
 
       // Loyalty discount saved
       const loyaltyDiscount = Number(order.loyaltyDiscountAmount || 0);
@@ -646,25 +622,18 @@ export class LoyaltyService {
       const orderDate = order.paidAt || order.createdAt;
       purchaseDates.push(new Date(orderDate));
 
-      // Process items and adjust for partial refunds
+      // Process items
       for (const item of order.items || []) {
         const approvedQty = Number(item.approvedQuantity || item.requestedQuantity || 0);
-        const refundedQty = Number(item.refundedQuantity || 0);
-        const netQty = Math.max(0, approvedQty - refundedQty);
+        if (approvedQty <= 0) continue;
 
-        if (netQty <= 0) continue;
-
-        totalQuantityPurchased += netQty;
+        totalQuantityPurchased += approvedQty;
 
         const key = item.variantId
           ? `${item.productId}_${item.variantId}`
           : item.productId;
 
-        const lineNetSpending = Math.max(
-          0,
-          Number(item.subtotal || item.unitPrice * netQty) -
-            Number(item.refundedAmount || 0),
-        );
+        const lineSpending = Number(item.subtotal || item.unitPrice * approvedQty);
 
         if (!productStatsMap.has(key)) {
           productStatsMap.set(key, {
@@ -675,16 +644,16 @@ export class LoyaltyService {
             variantId: item.variantId || null,
             variantName: item.variant?.name || null,
             image: item.variant?.image || item.product?.image || null,
-            totalQuantity: netQty,
-            totalSpending: lineNetSpending,
+            totalQuantity: approvedQty,
+            totalSpending: lineSpending,
             orderCount: 1,
             firstPurchasedAt: new Date(orderDate),
             lastPurchasedAt: new Date(orderDate),
           });
         } else {
           const stat = productStatsMap.get(key)!;
-          stat.totalQuantity += netQty;
-          stat.totalSpending += lineNetSpending;
+          stat.totalQuantity += approvedQty;
+          stat.totalSpending += lineSpending;
           stat.orderCount += 1;
           stat.lastPurchasedAt = new Date(orderDate);
         }

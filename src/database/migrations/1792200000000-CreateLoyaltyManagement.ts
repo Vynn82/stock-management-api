@@ -60,28 +60,6 @@ export class CreateLoyaltyManagement1792200000000 implements MigrationInterface 
       VALUES (true, 10.00, 'AUTOMATIC', 30, 'HIGHEST_ONLY', '[]'::jsonb, '[]'::jsonb)
     `);
 
-    // 3. Create customer_order_refunds table
-    await queryRunner.query(`
-      CREATE TABLE "customer_order_refunds" (
-        "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
-        "refund_no" varchar(50) NOT NULL,
-        "order_id" uuid NOT NULL,
-        "amount" numeric(15,2) NOT NULL,
-        "refund_type" varchar(30) NOT NULL DEFAULT 'PARTIAL',
-        "reason" text,
-        "processed_by_id" uuid,
-        "items" jsonb NOT NULL DEFAULT '[]',
-        "created_at" TIMESTAMP NOT NULL DEFAULT now(),
-        "updated_at" TIMESTAMP NOT NULL DEFAULT now(),
-        CONSTRAINT "UQ_customer_order_refunds_no" UNIQUE ("refund_no"),
-        CONSTRAINT "PK_customer_order_refunds" PRIMARY KEY ("id"),
-        CONSTRAINT "FK_customer_order_refunds_order" FOREIGN KEY ("order_id")
-          REFERENCES "customer_orders"("id") ON DELETE CASCADE,
-        CONSTRAINT "FK_customer_order_refunds_user" FOREIGN KEY ("processed_by_id")
-          REFERENCES "users"("id") ON DELETE SET NULL
-      )
-    `);
-
     // 4. Alter customers table
     await queryRunner.query(`
       ALTER TABLE "customers"
@@ -112,8 +90,7 @@ export class CreateLoyaltyManagement1792200000000 implements MigrationInterface 
         ADD COLUMN IF NOT EXISTS "loyalty_discount_percent" numeric(5,2) NOT NULL DEFAULT 0,
         ADD COLUMN IF NOT EXISTS "loyalty_discount_amount" numeric(15,2) NOT NULL DEFAULT 0,
         ADD COLUMN IF NOT EXISTS "loyalty_tier_id" uuid,
-        ADD COLUMN IF NOT EXISTS "loyalty_tier_name" varchar(100),
-        ADD COLUMN IF NOT EXISTS "refunded_amount" numeric(15,2) NOT NULL DEFAULT 0
+        ADD COLUMN IF NOT EXISTS "loyalty_tier_name" varchar(100)
     `);
 
     // Initialize subtotal_amount = total_amount for existing orders
@@ -129,9 +106,7 @@ export class CreateLoyaltyManagement1792200000000 implements MigrationInterface 
         ADD COLUMN IF NOT EXISTS "original_unit_price" numeric(15,2),
         ADD COLUMN IF NOT EXISTS "discount_percent" numeric(5,2) NOT NULL DEFAULT 0,
         ADD COLUMN IF NOT EXISTS "discount_amount" numeric(15,2) NOT NULL DEFAULT 0,
-        ADD COLUMN IF NOT EXISTS "is_discount_excluded" boolean NOT NULL DEFAULT false,
-        ADD COLUMN IF NOT EXISTS "refunded_quantity" numeric(15,3) NOT NULL DEFAULT 0,
-        ADD COLUMN IF NOT EXISTS "refunded_amount" numeric(15,2) NOT NULL DEFAULT 0
+        ADD COLUMN IF NOT EXISTS "is_discount_excluded" boolean NOT NULL DEFAULT false
     `);
 
     // Initialize original_unit_price = unit_price for existing order items
@@ -176,8 +151,6 @@ export class CreateLoyaltyManagement1792200000000 implements MigrationInterface 
 
     await queryRunner.query(`
       ALTER TABLE "customer_order_items"
-        DROP COLUMN IF EXISTS "refunded_amount",
-        DROP COLUMN IF EXISTS "refunded_quantity",
         DROP COLUMN IF EXISTS "is_discount_excluded",
         DROP COLUMN IF EXISTS "discount_amount",
         DROP COLUMN IF EXISTS "discount_percent",
@@ -186,7 +159,6 @@ export class CreateLoyaltyManagement1792200000000 implements MigrationInterface 
 
     await queryRunner.query(`
       ALTER TABLE "customer_orders"
-        DROP COLUMN IF EXISTS "refunded_amount",
         DROP COLUMN IF EXISTS "loyalty_tier_name",
         DROP COLUMN IF EXISTS "loyalty_tier_id",
         DROP COLUMN IF EXISTS "loyalty_discount_amount",
@@ -207,7 +179,6 @@ export class CreateLoyaltyManagement1792200000000 implements MigrationInterface 
         DROP COLUMN IF EXISTS "loyalty_tier_id"
     `);
 
-    await queryRunner.query(`DROP TABLE IF EXISTS "customer_order_refunds"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "loyalty_configs"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "loyalty_tiers"`);
   }

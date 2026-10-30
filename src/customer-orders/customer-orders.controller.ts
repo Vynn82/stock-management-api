@@ -26,7 +26,6 @@ import {
   RejectCustomerRegistrationDto,
 } from './dto/customer-registration.dto';
 import { CreateStaffCustomerOrderDto } from './dto/create-staff-customer-order.dto';
-import { ProcessRefundDto } from './dto/customer-order-refund.dto';
 import { StaffOrderQueryDto } from './dto/staff-order-query.dto';
 import * as authenticatedUserInterface from '../auth/interfaces/authenticated-request.interface';
 
@@ -247,13 +246,5 @@ export class CustomerOrdersController {
     @Req() req: authenticatedUserInterface.AuthenticatedRequest,
   ) {
     return this.customerOrdersService.completeOrder(id, req.user.sub);
-  }
-  @Post(':id/refund')
-  async processRefund(
-    @Param('id') id: string,
-    @Req() req: authenticatedUserInterface.AuthenticatedRequest,
-    @Body() dto: ProcessRefundDto,
-  ) {
-    return this.customerOrdersService.processOrderRefund(id, req.user.sub, dto);
   }
 }

@@ -15,7 +15,6 @@ import { CustomerOrder } from './entities/customer-order.entity';
 import { CustomerOrderItem } from './entities/customer-order-item.entity';
 import { CustomerOrderMessage } from './entities/customer-order-message.entity';
 import { CustomerOrderPayment } from './entities/customer-order-payment.entity';
-import { CustomerOrderRefund, RefundType, RefundedItemDetail } from './entities/customer-order-refund.entity';
 import { Product } from '../products/entities/product.entity';
 import { ProductVariant } from '../product-variants/entities/product-variant.entity';
 import { Stock } from '../stock/entities/stock.entity';
@@ -35,7 +34,6 @@ import {
 } from './enums/customer-order-enums';
 import { CreateCustomerOrderDto } from './dto/create-customer-order.dto';
 import { CreateStaffCustomerOrderDto } from './dto/create-staff-customer-order.dto';
-import { ProcessRefundDto } from './dto/customer-order-refund.dto';
 import {
   AskCustomerDto,
   ConfirmQuantityDto,
@@ -1888,129 +1886,8 @@ export class CustomerOrdersService {
   }
 
 
-// ========================================================
-  // REFUND MANAGEMENT & LOYALTY ADJUSTMENT
-  // ========================================================
-
-  async processOrderRefund(
-    orderId: string,
-    staffId: string,
-    dto: ProcessRefundDto,
-  ) {
-    return this.dataSource.transaction(async (manager: EntityManager) => {
-      const order = await manager.findOne(CustomerOrder, {
-        where: { id: orderId },
-        relations: {
-          items: true,
-          refunds: true,
-        },
-      });
-
-      if (!order) {
-        throw new NotFoundException(`Order #${orderId} not found`);
-      }
-
-      const totalPaidOrAmount = Number(order.totalAmount);
-      const previouslyRefunded = Number(order.refundedAmount || 0);
-      const remainingRefundable = Math.max(
-        0,
-        Number((totalPaidOrAmount - previouslyRefunded).toFixed(2)),
-      );
-
-      if (remainingRefundable <= 0) {
-        throw new BadRequestException('Order is already fully refunded');
-      }
-
-      let refundAmount = 0;
-      if (dto.refundType === RefundType.FULL) {
-        refundAmount = remainingRefundable;
-        for (const item of order.items) {
-          item.refundedQuantity = item.approvedQuantity;
-          item.refundedAmount = item.subtotal;
-          await manager.save(CustomerOrderItem, item);
-        }
-        order.paymentStatus = PaymentStatus.REFUNDED;
-      } else {
-        if (dto.amount && dto.amount > 0) {
-          refundAmount = Math.min(Number(dto.amount), remainingRefundable);
-        } else if (dto.items && dto.items.length > 0) {
-          let itemRefundSum = 0;
-          for (const refundItem of dto.items) {
-            const target = order.items.find((i) => i.id === refundItem.orderItemId);
-            if (target) {
-              const maxQty = Math.max(
-                0,
-                Number(target.approvedQuantity) - Number(target.refundedQuantity || 0),
-              );
-              const qtyToRefund = Math.min(Number(refundItem.quantity), maxQty);
-              const unitP = Number(target.unitPrice || 0);
-              const itemAmt = Number((qtyToRefund * unitP).toFixed(2));
-              target.refundedQuantity = Number(
-                (Number(target.refundedQuantity || 0) + qtyToRefund).toFixed(3),
-              );
-              target.refundedAmount = Number(
-                (Number(target.refundedAmount || 0) + itemAmt).toFixed(2),
-              );
-              await manager.save(CustomerOrderItem, target);
-              itemRefundSum += itemAmt;
-            }
-          }
-          refundAmount = Math.min(itemRefundSum, remainingRefundable);
-        }
-
-        if (refundAmount <= 0) {
-          throw new BadRequestException('Refund amount must be greater than zero');
-        }
-
-        const newTotalRefunded = Number((previouslyRefunded + refundAmount).toFixed(2));
-        if (newTotalRefunded >= totalPaidOrAmount) {
-          order.paymentStatus = PaymentStatus.REFUNDED;
-        } else {
-          order.paymentStatus = PaymentStatus.PARTIALLY_REFUNDED;
-        }
-      }
-
-      order.refundedAmount = Number(
-        (Number(order.refundedAmount || 0) + refundAmount).toFixed(2),
-      );
-      await manager.save(CustomerOrder, order);
-
-      const datePrefix = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-      const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-      const refundNo = `REF-${datePrefix}-${randomSuffix}`;
-
-      const refundRecord = manager.create(CustomerOrderRefund, {
-        refundNo,
-        orderId: order.id,
-        amount: refundAmount,
-        refundType: dto.refundType,
-        reason: dto.reason || 'Staff processed refund',
-        processedById: staffId,
-        items: (dto.items as any) || [],
-      });
-      await manager.save(CustomerOrderRefund, refundRecord);
-
-      const logMsg = manager.create(CustomerOrderMessage, {
-        orderId: order.id,
-        senderType: MessageSenderType.STAFF,
-        senderId: staffId,
-        message: `Refund of ${refundAmount.toFixed(2)} (${dto.refundType}) processed. Ref: ${refundNo}.`,
-        messageType: MessageType.STATUS_UPDATE,
-      });
-      await manager.save(CustomerOrderMessage, logMsg);
-
-      await this.loyaltyService.calculateCustomerLoyalty(order.customerId, manager);
-
-      return {
-        success: true,
-        refund: refundRecord,
-        refundedAmount: refundAmount,
-        totalRefunded: order.refundedAmount,
-        paymentStatus: order.paymentStatus,
-      };
-    });
-  }
 }
+
 
 function CustomerOrderOrderOrAny(order: CustomerOrder): any {
   return order;

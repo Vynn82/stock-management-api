@@ -9,7 +9,6 @@ import { CustomerOrder } from './entities/customer-order.entity';
 import { CustomerOrderItem } from './entities/customer-order-item.entity';
 import { CustomerOrderMessage } from './entities/customer-order-message.entity';
 import { CustomerOrderPayment } from './entities/customer-order-payment.entity';
-import { CustomerOrderRefund } from './entities/customer-order-refund.entity';
 import { Product } from '../products/entities/product.entity';
 import { ProductVariant } from '../product-variants/entities/product-variant.entity';
 import { Stock } from '../stock/entities/stock.entity';
@@ -34,7 +33,6 @@ import { CustomerJwtGuard } from './guards/customer-jwt.guard';
       CustomerOrderItem,
       CustomerOrderMessage,
       CustomerOrderPayment,
-      CustomerOrderRefund,
       Product,
       ProductVariant,
       Stock,

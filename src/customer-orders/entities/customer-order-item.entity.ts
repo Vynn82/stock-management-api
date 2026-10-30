@@ -162,24 +162,6 @@ export class CustomerOrderItem {
   })
   isDiscountExcluded: boolean;
 
-  @Column({
-    name: 'refunded_quantity',
-    type: 'decimal',
-    precision: 15,
-    scale: 3,
-    default: 0,
-  })
-  refundedQuantity: number;
-
-  @Column({
-    name: 'refunded_amount',
-    type: 'decimal',
-    precision: 15,
-    scale: 2,
-    default: 0,
-  })
-  refundedAmount: number;
-
 
   @CreateDateColumn({
     name: 'created_at',
