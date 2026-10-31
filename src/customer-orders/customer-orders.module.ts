@@ -67,6 +67,7 @@ import { CustomerJwtGuard } from './guards/customer-jwt.guard';
     TelegramAuthService,
     TelegramBotService,
     CustomerJwtGuard,
+    JwtModule,
   ],
 })
 export class CustomerOrdersModule {}
