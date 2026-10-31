@@ -700,7 +700,27 @@ export class PurchaseOrdersService {
       bySupplier.set(r.supplierId, agg);
     }
 
-    const suppliers = [...bySupplier.values()].map((a) => {
+    type SupplierRecommendation = {
+      supplierId: string;
+      code: string;
+      name: string;
+      isDefault: boolean;
+      timesOrdered: number;
+      totalQuantity: number;
+      totalReceived: number;
+      damagedQuantity: number;
+      wrongQuantity: number;
+      averageRating: number | null;
+      ratingCount: number;
+      lastPrice: number;
+      lowestPrice: number;
+      averagePrice: number;
+      lastOrderedAt: Date | null;
+      averageLeadDays: number | null;
+      fillRate: number | null;
+    };
+
+    const suppliers: SupplierRecommendation[] = [...bySupplier.values()].map((a) => {
       const prices = a.lines.map((l) => l.price);
       const totalQty = a.lines.reduce((sum, l) => sum + l.quantity, 0);
       const weighted =
