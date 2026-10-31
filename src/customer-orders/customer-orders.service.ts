@@ -188,20 +188,21 @@ export class CustomerOrdersService {
           0,
         );
 
-        let approvedQuantity = 0;
-        let waitingQuantity = 0;
-        let itemStatus = 'PENDING';
+        if (totalAvailableStock <= 0) {
+          throw new BadRequestException(
+            `Product "${product.name}${variant ? ` (${variant.name})` : ''}" is out of stock. You can only purchase products that are in stock.`,
+          );
+        }
 
         if (totalAvailableStock < requestedQty) {
-          // Automatic stock check & allocation
-          approvedQuantity = totalAvailableStock;
-          waitingQuantity = requestedQty - totalAvailableStock;
-          itemStatus = approvedQuantity > 0 ? 'PARTIAL' : 'WAITING_STOCK';
-        } else {
-          approvedQuantity = requestedQty;
-          waitingQuantity = 0;
-          itemStatus = 'PENDING';
+          throw new BadRequestException(
+            `Insufficient stock for "${product.name}${variant ? ` (${variant.name})` : ''}". Available: ${totalAvailableStock}, Requested: ${requestedQty}. You can only purchase products that are in stock.`,
+          );
         }
+
+        const approvedQuantity = requestedQty;
+        const waitingQuantity = 0;
+        const itemStatus = 'PENDING';
 
         const discItem = loyaltyResult.items.find(
           (di) =>

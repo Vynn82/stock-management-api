@@ -38,6 +38,7 @@ describe('CustomerOrdersService Business Invariant Tests', () => {
   let telegramBotService: any;
   let telegramAuthService: any;
   let mailsService: any;
+  let loyaltyService: any;
 
   beforeEach(async () => {
     dataSource = {
@@ -107,6 +108,32 @@ describe('CustomerOrdersService Business Invariant Tests', () => {
       createMail: jest.fn().mockResolvedValue({}),
     };
 
+    loyaltyService = {
+      calculateOrderLoyaltyDiscount: jest.fn().mockImplementation((customerId, items) => {
+        const subtotal = items.reduce((sum: number, i: any) => sum + (i.quantity * 10), 0);
+        return Promise.resolve({
+          tierId: null,
+          tierName: null,
+          loyaltyDiscountPercent: 0,
+          subtotalAmount: subtotal,
+          loyaltyDiscountAmount: 0,
+          totalAmount: subtotal,
+          items: items.map((i: any) => ({
+            productId: i.productId,
+            variantId: i.variantId,
+            quantity: i.quantity,
+            originalUnitPrice: 10,
+            unitPrice: 10,
+            discountPercent: 0,
+            discountAmount: 0,
+            isExcluded: false,
+            subtotal: i.quantity * 10,
+          })),
+        });
+      }),
+      calculateCustomerLoyalty: jest.fn().mockResolvedValue({}),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CustomerOrdersService,
@@ -129,34 +156,7 @@ describe('CustomerOrdersService Business Invariant Tests', () => {
         { provide: TelegramBotService, useValue: telegramBotService },
         { provide: TelegramAuthService, useValue: telegramAuthService },
         { provide: MailsService, useValue: mailsService },
-        {
-          provide: LoyaltyService,
-          useValue: {
-            calculateOrderLoyaltyDiscount: jest.fn().mockImplementation((customerId, items) => {
-              const subtotal = items.reduce((sum, i) => sum + (i.quantity * 10), 0);
-              return Promise.resolve({
-                tierId: null,
-                tierName: null,
-                loyaltyDiscountPercent: 0,
-                subtotalAmount: subtotal,
-                loyaltyDiscountAmount: 0,
-                totalAmount: subtotal,
-                items: items.map((i) => ({
-                  productId: i.productId,
-                  variantId: i.variantId,
-                  quantity: i.quantity,
-                  originalUnitPrice: 10,
-                  unitPrice: 10,
-                  discountPercent: 0,
-                  discountAmount: 0,
-                  isExcluded: false,
-                  subtotal: i.quantity * 10,
-                })),
-              });
-            }),
-            calculateCustomerLoyalty: jest.fn().mockResolvedValue({}),
-          },
-        },
+        { provide: LoyaltyService, useValue: loyaltyService },
       ],
     }).compile();
 
@@ -663,6 +663,75 @@ describe('CustomerOrdersService Business Invariant Tests', () => {
       expect(result.province).toBe('Phnom Penh');
       expect(result.district).toBe('Chamkarmon');
       expect(result.commune).toBe('Tonle Bassac');
+    });
+  });
+
+  describe('Customer In-Stock Ordering Requirement', () => {
+    const mockCustomer = {
+      id: 'cust-instock-1',
+      companyName: 'Store 1',
+      status: CustomerStatus.ACTIVE,
+      isActive: true,
+      telegramAccounts: [],
+    };
+    const mockProduct = {
+      id: 'prod-stock-1',
+      name: 'Wireless Mouse',
+      sellingPrice: 25.0,
+      isActive: true,
+    };
+
+    beforeEach(() => {
+      customerRepo.findOne.mockResolvedValue(mockCustomer);
+      loyaltyService.calculateOrderLoyaltyDiscount.mockResolvedValue({
+        subtotalAmount: 25.0,
+        loyaltyDiscountPercent: 0,
+        loyaltyDiscountAmount: 0,
+        totalAmount: 25.0,
+        tierId: null,
+        tierName: 'New Customer',
+        items: [],
+      });
+    });
+
+    it('should reject customer order if product is out of stock (stock is 0)', async () => {
+      dataSource.manager.findOne.mockImplementation((entity: any) => {
+        if (entity === Product) return Promise.resolve(mockProduct);
+        return Promise.resolve(null);
+      });
+
+      const mockStockQuery = {
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([]),
+      };
+      dataSource.manager.createQueryBuilder.mockReturnValue(mockStockQuery);
+
+      await expect(
+        service.createOrder('cust-instock-1', {
+          items: [{ productId: 'prod-stock-1', quantity: 2 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject customer order if requested quantity exceeds available stock', async () => {
+      dataSource.manager.findOne.mockImplementation((entity: any) => {
+        if (entity === Product) return Promise.resolve(mockProduct);
+        return Promise.resolve(null);
+      });
+
+      const mockStockQuery = {
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([{ quantity: 2 }]),
+      };
+      dataSource.manager.createQueryBuilder.mockReturnValue(mockStockQuery);
+
+      await expect(
+        service.createOrder('cust-instock-1', {
+          items: [{ productId: 'prod-stock-1', quantity: 5 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });
