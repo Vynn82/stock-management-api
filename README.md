@@ -131,6 +131,17 @@ The workflow supports configurable certification and approval steps.
 - Cash on delivery payment recording (no online payment gateways)
 - Real-time automated Telegram notifications for all order and customer status milestones
 
+### 👑 Customer Loyalty & Tier Management
+
+- **Configurable Loyalty Tiers**: Automated tiers based on strict dual requirements: New (0-1 orders, 0%), Returning (2+ orders AND $2,000+ spending, 2%), Regular (5+ orders AND $7,500+ spending, 3%), VIP (10+ orders AND $15,000+ spending, 5%)
+- **Automatic Purchase Tracking**: Tracks completed order count, lifetime spending, total quantity purchased, average order value (AOV), purchase frequency, and per-product purchase history
+- **Strict Order Counting**: Each completed sales order counts as one purchase regardless of line items or quantity
+- **Order Eligibility**: Strictly completed orders contribute to loyalty; pending and cancelled orders are excluded
+- **Profit-Margin Protection**: Configurable minimum profit margin floor (`minProfitMarginPercent`) prevents discounts from causing sales at a loss
+- **Product & Category Exclusions**: Configurable excluded products and categories from loyalty discounts
+- **Manual Tier Overrides**: Administrators can grant promotional or VIP tier overrides with optional expiration dates and audit notes
+- **Customer Loyalty Profile**: Full customer dashboard in both Web Admin and Telegram Mini App showing current tier, stats, next tier progress, and item purchase history
+
 ### 📈 Reports
 
 - Stock reports

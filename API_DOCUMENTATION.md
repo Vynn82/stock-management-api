@@ -53,7 +53,11 @@ A comprehensive guide and reference for all endpoints, authentication rules, glo
     - [22.4 Printable Thermal PDF Labels](#224-printable-thermal-pdf-labels)
     - [22.5 Automatic Barcode Generation & Real-time QR Synchronization](#225-automatic-barcode-generation--real-time-qr-synchronization)
 23. [Purchase Orders & Goods Receiving API (`/purchase-orders`)](#23-purchase-orders--goods-receiving-api-purchase-orders)
-24. [Permission Codes by Role](#24-permission-codes-by-role)
+24. [Customer Loyalty Management API (`/loyalty`)](#24-customer-loyalty-management-api-loyalty)
+    - [24.1 Architecture & Flow Overview](#241-architecture--flow-overview)
+    - [24.2 Endpoints Summary](#242-endpoints-summary)
+    - [24.3 Detailed Endpoint Specifications](#243-detailed-endpoint-specifications)
+25. [Permission Codes by Role](#25-permission-codes-by-role)
 
 ---
 
@@ -2897,7 +2901,271 @@ The order becomes `PARTIALLY_RECEIVED` until every line is complete, then `RECEI
 
 ---
 
-## 24. Permission Codes by Role
+## 24. Customer Loyalty Management API (`/loyalty`)
+
+A robust, fully configurable **Customer Loyalty & Tier Management** system that tracks purchase statistics, automates customer tier progression based on strict dual requirements (order count and lifetime spending), enforces profit-margin protected discounts, and provides comprehensive customer loyalty profiles.
+
+---
+
+### 24.1 Architecture & Flow Overview
+
+#### 24.1.1 Configurable Loyalty Tiers (Dual-Requirement Assignment)
+Customers are evaluated across configurable tiers with default progression:
+- **New**: 0–1 orders, $0+ spending, **0% discount**
+- **Returning**: 2+ orders AND $2,000+ spending, **2% discount**
+- **Regular**: 5+ orders AND $7,500+ spending, **3% discount**
+- **VIP**: 10+ orders AND $15,000+ spending, **5% discount**
+
+> **Strict Dual Requirement**: Both `minOrders` **and** `minSpending` requirements must be satisfied for automatic promotion to any tier. If a customer has 10 orders but only $1,500 spending, they remain at the **New** tier until lifetime spending reaches $2,000.
+
+#### 24.1.2 Automatic Purchase Tracking & Recalculation
+Whenever a sales order is completed (`POST /customer-orders/:id/complete`), the loyalty engine automatically updates the customer profile:
+1. **Order Counting**: Each completed sales order counts as exactly **one purchase**, regardless of the number of line items or quantity purchased.
+2. **Order Eligibility**: Only completed orders (`status === COMPLETED`) contribute to loyalty statistics. Draft, pending, waiting-customer, waiting-stock, and cancelled orders are excluded. (Note: Order refund feature has been completely removed from the system).
+3. **Metrics Tracked**:
+   - Total completed order count
+   - Lifetime spending (sum of completed orders' `totalAmount`)
+   - Total quantity purchased across all products
+   - Average Order Value (AOV = `lifetimeSpending / completedOrderCount`)
+   - Purchase frequency (average days between completed orders)
+   - Product-level purchase history (quantities, net spending, first and last purchased timestamps)
+   - Recent discounted orders history
+
+#### 24.1.3 Margin Floor Protection & Discount Management
+- **Automatic Discount Application**: When a customer places an order or requests checkout, their tier's `discountPercent` is applied to eligible line items.
+- **Exclusions**: Specific products (`excludedProductIds`) and product categories (`excludedCategoryIds`) can be excluded from loyalty discounts.
+- **Margin Floor (`minProfitMarginPercent`)**: Configurable profit-margin floor (default `10%`). If applying the full tier discount would breach this minimum profit margin relative to the item's cost price, the discount is automatically reduced to the maximum safe rate, preventing products from ever being sold at a loss.
+- **Stacking Policy**: Defaults to `HIGHEST_ONLY` to prevent unintended discount stacking with promotional coupons.
+
+#### 24.1.4 Manual Tier Overrides
+- Administrators can manually assign any tier to a VIP or special customer via `POST /loyalty/customers/:id/override-tier`.
+- Supports optional `expiryDays` (e.g. 30 days VIP trial) and administrative notes.
+- When an override expires, the system automatically recalculates and falls back to the customer's earned calculated tier.
+
+---
+
+### 24.2 Endpoints Summary
+
+| Method | Endpoint | Auth Guard | Permission | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/loyalty/my-profile` | `CustomerJwtGuard` | None | Get authenticated customer's loyalty profile (Telegram Mini App) |
+| `GET` | `/customer-orders/loyalty/profile` | `CustomerJwtGuard` | None | Alias endpoint for Telegram Mini App |
+| `GET` | `/loyalty/config` | `AccessTokenGuard` | `LOYALTY_VIEW` | View global loyalty configuration and margin rules |
+| `PUT` | `/loyalty/config` | `AccessTokenGuard` | `LOYALTY_MANAGE` | Update global loyalty configuration |
+| `GET` | `/loyalty/tiers` | Public / Staff | None | List active loyalty tiers (`?includeInactive=true` for all) |
+| `GET` | `/loyalty/tiers/:id` | `AccessTokenGuard` | `LOYALTY_VIEW` | Get single loyalty tier details |
+| `POST` | `/loyalty/tiers` | `AccessTokenGuard` | `LOYALTY_MANAGE` | Create a new loyalty tier |
+| `PUT` | `/loyalty/tiers/:id` | `AccessTokenGuard` | `LOYALTY_MANAGE` | Update an existing loyalty tier |
+| `DELETE` | `/loyalty/tiers/:id` | `AccessTokenGuard` | `LOYALTY_MANAGE` | Deactivate / delete a loyalty tier |
+| `GET` | `/loyalty/customers/:id` | `AccessTokenGuard` | `LOYALTY_VIEW` | Get loyalty profile and statistics for any customer |
+| `POST` | `/loyalty/customers/:id/override-tier` | `AccessTokenGuard` | `LOYALTY_MANAGE` | Set or remove manual tier override |
+| `POST` | `/loyalty/recalculate-all` | `AccessTokenGuard` | `LOYALTY_MANAGE` | Batch recalculate loyalty profiles for all customers |
+
+---
+
+### 24.3 Detailed Endpoint Specifications
+
+#### 24.3.1 Get My Loyalty Profile (Telegram Mini App)
+- **Method**: `GET`
+- **Endpoint**: `/loyalty/my-profile` (or `/customer-orders/loyalty/profile`)
+- **Headers**: `Authorization: Bearer <customerToken>`
+- **Response (`200 OK`)**:
+```json
+{
+  "customer": {
+    "id": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "contactName": "John Doe",
+    "companyName": "Acme Corp",
+    "phone": "+85512345678",
+    "telegramUsername": "johndoe"
+  },
+  "currentTier": {
+    "id": "t2b2c3d4-e5f6-7890-abcd-1234567890ab",
+    "name": "Returning",
+    "code": "RETURNING",
+    "tierRank": 2,
+    "discountPercent": 2.0,
+    "color": "#3B82F6",
+    "badgeIcon": "Sparkles",
+    "description": "2% discount on eligible purchases",
+    "isManualOverride": false,
+    "overrideExpiry": null,
+    "overrideNotes": null
+  },
+  "statistics": {
+    "completedOrderCount": 3,
+    "lifetimeSpending": 2450.00,
+    "totalQuantityPurchased": 18,
+    "averageOrderValue": 816.67,
+    "purchaseFrequencyDays": 12.5,
+    "firstOrderDate": "2026-09-15T08:30:00.000Z",
+    "latestOrderDate": "2026-10-24T14:15:00.000Z",
+    "totalDiscountsReceived": 49.00
+  },
+  "progress": {
+    "nextTier": {
+      "id": "t3c3d4e5-f6a7-8901-bcde-2345678901bc",
+      "name": "Regular",
+      "code": "REGULAR",
+      "tierRank": 3,
+      "minOrders": 5,
+      "minSpending": 7500.00,
+      "discountPercent": 3.0,
+      "color": "#8B5CF6"
+    },
+    "ordersNeeded": 2,
+    "spendingNeeded": 5050.00,
+    "ordersProgressPercent": 60.0,
+    "spendingProgressPercent": 32.67,
+    "overallProgressPercent": 32.67
+  },
+  "productPurchaseHistory": [
+    {
+      "productId": "p1a2b3c4-d5e6-7890-abcd-ef1234567890",
+      "productName": "Wireless Ergonomic Mouse",
+      "productCode": "WEM-001",
+      "categoryName": "Accessories",
+      "variantId": null,
+      "variantName": null,
+      "image": "/uploads/products/mouse.png",
+      "totalQuantity": 5,
+      "totalSpending": 225.00,
+      "orderCount": 2,
+      "firstPurchasedAt": "2026-09-15T08:30:00.000Z",
+      "lastPurchasedAt": "2026-10-10T11:00:00.000Z"
+    }
+  ],
+  "recentDiscountedOrders": [
+    {
+      "id": "ord-9876",
+      "orderNo": "ORD-20261024-1122",
+      "subtotalAmount": 1000.00,
+      "loyaltyDiscountAmount": 20.00,
+      "totalAmount": 980.00,
+      "tierName": "Returning",
+      "completedAt": "2026-10-24T14:15:00.000Z"
+    }
+  ]
+}
+```
+
+---
+
+#### 24.3.2 Get Customer Loyalty Profile (Staff / Admin)
+- **Method**: `GET`
+- **Endpoint**: `/loyalty/customers/:id`
+- **Headers**: `Authorization: Bearer <staffToken>`
+- **Permission**: `LOYALTY_VIEW`
+- **Response (`200 OK`)**: Returns full `CustomerLoyaltyProfile` JSON as shown above.
+
+---
+
+#### 24.3.3 Business Configuration Endpoints
+
+##### `GET /loyalty/config`
+- **Permission**: `LOYALTY_VIEW`
+- **Response (`200 OK`)**:
+```json
+{
+  "id": "cfg-1234",
+  "isEnabled": true,
+  "minProfitMarginPercent": 10.0,
+  "downgradePolicy": "AUTOMATIC",
+  "gracePeriodDays": 30,
+  "stackingPolicy": "HIGHEST_ONLY",
+  "excludedProductIds": [],
+  "excludedCategoryIds": [],
+  "createdAt": "2026-10-24T00:00:00.000Z",
+  "updatedAt": "2026-10-24T00:00:00.000Z"
+}
+```
+
+##### `PUT /loyalty/config`
+- **Permission**: `LOYALTY_MANAGE`
+- **Payload (`application/json`)**:
+```json
+{
+  "isEnabled": true,
+  "minProfitMarginPercent": 12.5,
+  "downgradePolicy": "AUTOMATIC",
+  "gracePeriodDays": 45,
+  "stackingPolicy": "HIGHEST_ONLY",
+  "excludedProductIds": ["prod-uuid-1"],
+  "excludedCategoryIds": ["cat-uuid-2"]
+}
+```
+
+---
+
+#### 24.3.4 Loyalty Tiers Management
+
+##### `GET /loyalty/tiers`
+- **Query Parameters**: `includeInactive` (optional boolean, default `false`)
+- **Response (`200 OK`)**: Returns array of tier definitions.
+
+##### `POST /loyalty/tiers`
+- **Permission**: `LOYALTY_MANAGE`
+- **Payload (`application/json`)**:
+```json
+{
+  "name": "Elite VIP",
+  "code": "ELITE_VIP",
+  "tierRank": 5,
+  "minOrders": 25,
+  "minSpending": 30000,
+  "discountPercent": 7.5,
+  "color": "#EC4899",
+  "badgeIcon": "Gem",
+  "description": "Exclusive elite corporate tier",
+  "isActive": true
+}
+```
+
+##### `PUT /loyalty/tiers/:id`
+- **Permission**: `LOYALTY_MANAGE`
+- **Payload (`application/json`)**: Any partial field from tier creation payload.
+
+##### `DELETE /loyalty/tiers/:id`
+- **Permission**: `LOYALTY_MANAGE`
+- **Behavior**: Deactivates the tier (`isActive: false`). Customers assigned to it are automatically re-evaluated to the highest active eligible tier.
+
+---
+
+#### 24.3.5 Manual Customer Tier Override
+
+##### `POST /loyalty/customers/:id/override-tier`
+- **Permission**: `LOYALTY_MANAGE`
+- **Payload to Assign Override (`application/json`)**:
+```json
+{
+  "tierId": "tier-4-vip-uuid",
+  "expiryDays": 60,
+  "notes": "Granted 60-day promotional VIP tier for corporate trial"
+}
+```
+- **Payload to Clear Override (`application/json`)**:
+```json
+{
+  "tierId": null,
+  "notes": "Reset back to automated system tier calculation"
+}
+```
+
+##### `POST /loyalty/recalculate-all`
+- **Permission**: `LOYALTY_MANAGE`
+- **Description**: Re-evaluates all customers' completed orders, computes lifetime spending and order count, and updates their active tier in bulk.
+- **Response (`200 OK`)**:
+```json
+{
+  "success": true,
+  "processedCount": 150,
+  "message": "All customer loyalty profiles and tiers recalculated successfully"
+}
+```
+
+---
+
+## 25. Permission Codes by Role
 
 Codes are `RESOURCE_ACTION`. `SUPER_ADMIN` holds everything (and bypasses the guard). Roles and permissions can be changed by Super Admin at runtime; the table shows the **defaults from the seed**.
 
@@ -2926,6 +3194,8 @@ Codes are `RESOURCE_ACTION`. `SUPER_ADMIN` holds everything (and bypasses the gu
 | `PO_RECEIVE` | Receive goods and close orders | - | - | Yes |
 | `REPORT_VIEW` | Read reports | Yes | Yes | - |
 | `REPORT_SEND` | Send reports to Telegram | Yes | - | - |
+| `LOYALTY_VIEW` | View loyalty config, tiers, and customer profiles | Yes | Yes | - |
+| `LOYALTY_MANAGE` | Manage tiers, profit margins, exclusions, and manual overrides | Yes | - | - |
 
 Roles / permissions / menus management (`ROLE_*`, `PERMISSION_*`, `MENU_*`) is Super Admin only. `PO_RECEIVE` is held by Staff (and Super Admin); an Admin who also needs to receive goods must be granted it.
 
