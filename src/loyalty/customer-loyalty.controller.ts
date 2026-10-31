@@ -11,7 +11,7 @@ export class CustomerLoyaltyController {
   @UseGuards(CustomerJwtGuard)
   @Get()
   async getMyProfile(@Req() req: any) {
-    return this.loyaltyService.calculateCustomerLoyalty(req.customer.id);
+    return this.loyaltyService.calculateCustomerLoyalty(req.customer?.id || req.customer?.sub);
   }
 }
 

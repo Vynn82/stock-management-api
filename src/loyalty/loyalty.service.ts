@@ -165,7 +165,11 @@ export class LoyaltyService {
 
   async getOrCreateConfig(manager?: EntityManager): Promise<LoyaltyConfig> {
     const repo = manager ? manager.getRepository(LoyaltyConfig) : this.configRepo;
-    let config = await repo.findOne({ order: { createdAt: 'ASC' } });
+    const configs = await repo.find({
+      order: { createdAt: 'ASC' },
+      take: 1,
+    });
+    let config = configs[0] || null;
 
     if (!config) {
       config = repo.create({
@@ -557,6 +561,9 @@ export class LoyaltyService {
     customerId: string,
     manager?: EntityManager,
   ): Promise<CustomerLoyaltyProfile> {
+    if (!customerId) {
+      throw new BadRequestException('Customer ID is required');
+    }
     const cRepo = manager ? manager.getRepository(Customer) : this.customerRepo;
     const oRepo = manager ? manager.getRepository(CustomerOrder) : this.orderRepo;
     const tRepo = manager ? manager.getRepository(LoyaltyTier) : this.tierRepo;

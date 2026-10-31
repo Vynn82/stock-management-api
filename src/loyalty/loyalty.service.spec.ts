@@ -96,6 +96,7 @@ describe('LoyaltyService Unit Tests', () => {
 
     configRepo = {
       findOne: jest.fn().mockResolvedValue(mockConfig),
+      find: jest.fn().mockResolvedValue([mockConfig]),
       save: jest.fn().mockImplementation((val) => Promise.resolve(val)),
       create: jest.fn().mockImplementation((val) => val),
     };
