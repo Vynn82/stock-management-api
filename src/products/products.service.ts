@@ -229,23 +229,25 @@ export class ProductsService {
   }
 
   async findOne(id: string) {
-    const product = await this.productRepository.findOne({
-      where: {
-        id,
-      },
-      relations: {
-        category: true,
-        brand: true,
-        supplier: true,
-        variants: true,
-      },
-    });
+    const product = await this.productRepository
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.category', 'category')
+      .leftJoinAndSelect('product.brand', 'brand')
+      .leftJoinAndSelect('product.supplier', 'supplier')
+      .leftJoinAndSelect('product.variants', 'variants')
+      .leftJoinAndSelect('variants.stocks', 'variantStocks')
+      .leftJoinAndSelect('variantStocks.warehouse', 'variantWarehouse')
+      .leftJoinAndSelect('product.stocks', 'stocks')
+      .leftJoinAndSelect('stocks.variant', 'stockVariant')
+      .leftJoinAndSelect('stocks.warehouse', 'warehouse')
+      .where('product.id = :id', { id })
+      .getOne();
 
     if (!product) {
       throw new NotFoundException('Product not found');
     }
 
-    return product;
+    return this.formatProduct(product);
   }
 
   /** Edits a product and (optionally) its existing variants. */
