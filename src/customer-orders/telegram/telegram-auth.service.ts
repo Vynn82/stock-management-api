@@ -314,7 +314,8 @@ export class TelegramAuthService {
         phone: customer.phone,
         address: customer.address,
         latitude: customer.latitude != null ? Number(customer.latitude) : null,
-        longitude: customer.longitude != null ? Number(customer.longitude) : null,
+        longitude:
+          customer.longitude != null ? Number(customer.longitude) : null,
         province: customer.province || null,
         district: customer.district || null,
         commune: customer.commune || null,
@@ -435,7 +436,7 @@ export class TelegramAuthService {
           );
           return {
             ...tokenRes,
-            message: 'Your account is active. Welcome!',
+            message: 'Your account is active. Welcome to our shop',
           };
         }
 
@@ -775,11 +776,7 @@ export class TelegramAuthService {
 
       const province = addr.state || addr.province || addr.city || null;
       const district =
-        addr.city_district ||
-        addr.district ||
-        addr.county ||
-        addr.town ||
-        null;
+        addr.city_district || addr.district || addr.county || addr.town || null;
       const commune =
         addr.quarter ||
         addr.suburb ||
