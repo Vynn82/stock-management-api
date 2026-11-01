@@ -8,6 +8,26 @@ export interface TelegramInlineButton {
   web_app?: { url: string };
 }
 
+export interface OrderNotificationDetails {
+  customerName?: string | null;
+  companyName?: string | null;
+  phone?: string | null;
+  telegramUsername?: string | null;
+  deliveryAddress?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  province?: string | null;
+  district?: string | null;
+  commune?: string | null;
+  remark?: string | null;
+  items?: Array<{
+    name: string;
+    variantName?: string | null;
+    quantity: number;
+    price: number;
+  }>;
+}
+
 @Injectable()
 export class TelegramBotService {
   private readonly logger = new Logger(TelegramBotService.name);
@@ -110,28 +130,97 @@ export class TelegramBotService {
   // ========================================================
 
   async notifyOrderCreated(
-    chatId: string,
+    chatId: string | null | undefined,
     orderNo: string,
     totalAmount: number,
     orderId?: string,
+    details?: OrderNotificationDetails,
   ): Promise<void> {
     const miniAppUrl = this.getMiniAppUrl();
     const orderUrl = orderId ? `${miniAppUrl}/orders/${orderId}` : `${miniAppUrl}/orders`;
-    const text =
-      `📦 <b>Order Received!</b>\n\n` +
-      `Order: <b>#${orderNo}</b>\n` +
-      `Total: <b>${Number(totalAmount).toFixed(2)}</b>\n\n` +
-      `We have received your order and staff are currently reviewing stock availability.\n` +
-      `<i>Payment is cash on delivery.</i>`;
 
-    await this.sendMessage(chatId, text, [
+    const mapsUrl =
+      details?.latitude && details?.longitude
+        ? `https://maps.google.com/?q=${Number(details.latitude).toFixed(6)},${Number(details.longitude).toFixed(6)}`
+        : null;
+
+    const areaParts = [details?.commune, details?.district, details?.province].filter(Boolean);
+    const areaText = areaParts.length > 0 ? areaParts.join(', ') : null;
+
+    let itemsText = '';
+    if (details?.items && details.items.length > 0) {
+      itemsText =
+        `\n🛒 <b>Ordered Items:</b>\n` +
+        details.items
+          .map(
+            (i) =>
+              `• ${i.name}${i.variantName ? ` (${i.variantName})` : ''} x${i.quantity} — $${(Number(i.price) * Number(i.quantity)).toFixed(2)}`,
+          )
+          .join('\n');
+    }
+
+    let customerText = '';
+    if (details?.customerName || details?.companyName || details?.phone) {
+      customerText =
+        `\n👤 <b>Customer Information:</b>\n` +
+        (details.customerName ? `• Contact: <b>${details.customerName}</b>\n` : '') +
+        (details.companyName ? `• Company: <b>${details.companyName}</b>\n` : '') +
+        (details.phone ? `• Phone: <b>${details.phone}</b>\n` : '') +
+        (details.telegramUsername ? `• Telegram: @${details.telegramUsername}\n` : '');
+    }
+
+    let locationText = '';
+    if (details?.deliveryAddress || areaText || mapsUrl) {
+      locationText =
+        `\n📍 <b>Delivery Location:</b>\n` +
+        (details?.deliveryAddress ? `• Address: <b>${details.deliveryAddress}</b>\n` : '') +
+        (areaText ? `• Area: <b>${areaText}</b>\n` : '') +
+        (mapsUrl ? `• Map Pin: <a href="${mapsUrl}">Open in Google Maps</a>\n` : '');
+    }
+
+    const remarkText = details?.remark ? `\n📝 <b>Note:</b> ${details.remark}\n` : '';
+
+    const text =
+      `📦 <b>New Order Received!</b>\n\n` +
+      `Order: <b>#${orderNo}</b>\n` +
+      `Total: <b>$${Number(totalAmount).toFixed(2)}</b>\n` +
+      customerText +
+      locationText +
+      itemsText +
+      remarkText +
+      `\n<i>Payment is cash on delivery.</i>`;
+
+    const buttons: TelegramInlineButton[][] = [
       [
         {
           text: '📱 View Order in Mini App',
           web_app: { url: orderUrl },
         },
       ],
-    ]);
+    ];
+
+    if (mapsUrl) {
+      buttons[0].push({
+        text: '📍 View on Map',
+        url: mapsUrl,
+      });
+    }
+
+    if (chatId) {
+      await this.sendMessage(chatId, text, buttons);
+    }
+
+    // Also notify store/staff channel if configured
+    const staffChatId =
+      this.configService.get<string>('TELEGRAM_CHAT_ID') ||
+      this.configService.get<string>('TELEGRAM_STAFF_CHAT_ID');
+    if (
+      staffChatId &&
+      String(staffChatId).trim() !== '' &&
+      String(staffChatId) !== String(chatId)
+    ) {
+      await this.sendMessage(staffChatId, text, buttons);
+    }
   }
 
   async notifyStaffOrderCreated(
@@ -244,7 +333,9 @@ export class TelegramBotService {
       },
     ]);
 
-    await this.sendMessage(chatId, text, buttons);
+    if (chatId) {
+      await this.sendMessage(chatId, text, buttons);
+    }
   }
 
   async notifyOrderConfirmed(chatId: string, orderNo: string): Promise<void> {

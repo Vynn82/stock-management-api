@@ -20,7 +20,10 @@ import { ProductVariant } from '../product-variants/entities/product-variant.ent
 import { Stock } from '../stock/entities/stock.entity';
 import { Warehouse } from '../warehouses/entities/warehouse.entity';
 import { MailsService } from '../mails/mails.service';
-import { TelegramBotService } from './telegram/telegram-bot.service';
+import {
+  TelegramBotService,
+  OrderNotificationDetails,
+} from './telegram/telegram-bot.service';
 
 import { CustomerOrderStatus } from './enums/customer-order-status.enum';
 import { CustomerStatus } from './enums/customer-status.enum';
@@ -125,6 +128,12 @@ export class CustomerOrdersService {
 
       let totalAmount = 0;
       const orderItems: CustomerOrderItem[] = [];
+      const itemNotificationDetails: Array<{
+        name: string;
+        variantName?: string | null;
+        quantity: number;
+        price: number;
+      }> = [];
 
       for (const reqItem of dto.items) {
         const product = await manager.findOne(Product, {
@@ -232,6 +241,12 @@ export class CustomerOrdersService {
         });
 
         orderItems.push(orderItem);
+        itemNotificationDetails.push({
+          name: product.name,
+          variantName: variant ? variant.name : null,
+          quantity: requestedQty,
+          price: effectiveUnitPrice,
+        });
       }
 
       // 3. Create the order entity
@@ -252,6 +267,26 @@ export class CustomerOrdersService {
         ? CustomerOrderStatus.WAITING_STOCK
         : CustomerOrderStatus.PENDING_REVIEW;
 
+      const resolvedLatitude =
+        dto.latitude !== undefined && dto.latitude !== null
+          ? Number(dto.latitude)
+          : customer.latitude !== null && customer.latitude !== undefined
+            ? Number(customer.latitude)
+            : null;
+
+      const resolvedLongitude =
+        dto.longitude !== undefined && dto.longitude !== null
+          ? Number(dto.longitude)
+          : customer.longitude !== null && customer.longitude !== undefined
+            ? Number(customer.longitude)
+            : null;
+
+      const resolvedDeliveryAddress =
+        dto.deliveryAddress || customer.address || null;
+      const resolvedProvince = dto.province || customer.province || null;
+      const resolvedDistrict = dto.district || customer.district || null;
+      const resolvedCommune = dto.commune || customer.commune || null;
+
       const newOrder = manager.create(CustomerOrder, {
         orderNo,
         customerId: customer.id,
@@ -268,18 +303,12 @@ export class CustomerOrdersService {
         loyaltyTierId: loyaltyResult.tierId,
         loyaltyTierName: loyaltyResult.tierName,
         totalAmount: loyaltyResult.totalAmount,
-        deliveryAddress: dto.deliveryAddress || customer.address || null,
-        latitude:
-          customer.latitude !== null && customer.latitude !== undefined
-            ? Number(customer.latitude)
-            : null,
-        longitude:
-          customer.longitude !== null && customer.longitude !== undefined
-            ? Number(customer.longitude)
-            : null,
-        province: customer.province || null,
-        district: customer.district || null,
-        commune: customer.commune || null,
+        deliveryAddress: resolvedDeliveryAddress,
+        latitude: resolvedLatitude,
+        longitude: resolvedLongitude,
+        province: resolvedProvince,
+        district: resolvedDistrict,
+        commune: resolvedCommune,
         remark: dto.remark || null,
       });
 
@@ -290,6 +319,22 @@ export class CustomerOrdersService {
         item.orderId = savedOrder.id;
       }
       await manager.save(CustomerOrderItem, orderItems);
+
+      const notificationDetails: OrderNotificationDetails = {
+        customerName:
+          customer.contactName || customer.companyName || 'Customer',
+        companyName: customer.companyName || null,
+        phone: customer.phone || null,
+        telegramUsername: customer.telegramUsername || null,
+        deliveryAddress: resolvedDeliveryAddress,
+        latitude: resolvedLatitude,
+        longitude: resolvedLongitude,
+        province: resolvedProvince,
+        district: resolvedDistrict,
+        commune: resolvedCommune,
+        remark: dto.remark || null,
+        items: itemNotificationDetails,
+      };
 
       // 5. Create queued / audit message and notify
       if (hasShortage) {
@@ -307,21 +352,6 @@ export class CustomerOrdersService {
           messageType: MessageType.STATUS_UPDATE,
         });
         await manager.save(CustomerOrderMessage, statusMessage);
-
-        if (savedOrder.telegramChatId) {
-          this.telegramBotService
-            .notifyOrderCreated(
-              savedOrder.telegramChatId,
-              orderNo,
-              totalAmount,
-              savedOrder.id,
-            )
-            .catch((err) =>
-              this.logger.error(
-                `Failed to send order creation notification: ${err.message}`,
-              ),
-            );
-        }
       } else {
         const initMessage = manager.create(CustomerOrderMessage, {
           orderId: savedOrder.id,
@@ -330,31 +360,47 @@ export class CustomerOrdersService {
           messageType: MessageType.STATUS_UPDATE,
         });
         await manager.save(CustomerOrderMessage, initMessage);
-
-        if (savedOrder.telegramChatId) {
-          this.telegramBotService
-            .notifyOrderCreated(
-              savedOrder.telegramChatId,
-              orderNo,
-              totalAmount,
-              savedOrder.id,
-            )
-            .catch((err) =>
-              this.logger.error(
-                `Failed to send order creation notification: ${err.message}`,
-              ),
-            );
-        }
       }
+
+      // Notify customer and staff via Telegram
+      this.telegramBotService
+        .notifyOrderCreated(
+          savedOrder.telegramChatId,
+          orderNo,
+          loyaltyResult.totalAmount,
+          savedOrder.id,
+          notificationDetails,
+        )
+        .catch((err) =>
+          this.logger.error(
+            `Failed to send order creation notification: ${err.message}`,
+          ),
+        );
 
       // 7. Notify internal Staff via Mails system
       try {
+        const customerDisplayName =
+          customer.contactName || customer.companyName || 'Customer';
+        const locationDetails = resolvedDeliveryAddress
+          ? ` Location: ${resolvedDeliveryAddress}${
+              resolvedLatitude && resolvedLongitude
+                ? ` (${resolvedLatitude}, ${resolvedLongitude})`
+                : ''
+            }.`
+          : '';
+        const itemsSummary = itemNotificationDetails
+          .map(
+            (i) =>
+              `${i.name}${i.variantName ? ` (${i.variantName})` : ''} x${i.quantity}`,
+          )
+          .join(', ');
+
         await this.mailsService.createMail({
           recipientId: customer.id,
           requestId: savedOrder.id,
           requestType: 'CUSTOMER_ORDER',
           subject: `New Customer Order #${orderNo}`,
-          message: `Customer ${customer.firstName} placed order #${orderNo} ($${totalAmount.toFixed(2)}).`,
+          message: `Customer ${customerDisplayName} placed order #${orderNo} ($${loyaltyResult.totalAmount.toFixed(2)}). Items: ${itemsSummary}.${locationDetails}`,
           action: 'REVIEW',
           requestUrl: `/customer-orders/${savedOrder.id}`,
         });
@@ -431,6 +477,12 @@ export class CustomerOrdersService {
 
       let totalAmount = 0;
       const orderItems: CustomerOrderItem[] = [];
+      const itemNotificationDetails: Array<{
+        name: string;
+        variantName?: string | null;
+        quantity: number;
+        price: number;
+      }> = [];
 
       for (const reqItem of dto.items) {
         const product = await manager.findOne(Product, {
@@ -538,6 +590,12 @@ export class CustomerOrdersService {
         });
 
         orderItems.push(orderItem);
+        itemNotificationDetails.push({
+          name: product.name,
+          variantName: variant ? variant.name : null,
+          quantity: requestedQty,
+          price: effectiveUnitPrice,
+        });
       }
 
       // 4. Create Order entity
@@ -791,7 +849,7 @@ export class CustomerOrdersService {
     if (queryDto.search) {
       const search = `%${queryDto.search.trim()}%`;
       query.andWhere(
-        '(order.order_no ILIKE :search OR customer.first_name ILIKE :search OR customer.company_name ILIKE :search OR customer.telegram_username ILIKE :search)',
+        '(order.order_no ILIKE :search OR customer.contact_name ILIKE :search OR customer.company_name ILIKE :search OR customer.telegram_username ILIKE :search)',
         { search },
       );
     }
