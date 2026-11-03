@@ -23,8 +23,8 @@ async function bootstrap() {
 
   app.enableCors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, curl, or telegram webhook)
-      if (!origin) return callback(null, true);
+      // Allow requests with no origin or sandboxed iframe origin 'null'
+      if (!origin || origin === 'null') return callback(null, true);
 
       const allowedOrigins = [
         'http://localhost:8200',
@@ -69,7 +69,11 @@ async function bootstrap() {
         origin.endsWith('.ngrok-free.app') ||
         origin.endsWith('.ngrok.io') ||
         origin.endsWith('.ngrok.app') ||
-        origin.endsWith('.loca.lt')
+        origin.endsWith('.loca.lt') ||
+        origin.endsWith('.telegram.org') ||
+        origin === 'https://web.telegram.org' ||
+        origin === 'https://webk.telegram.org' ||
+        origin === 'https://webz.telegram.org' 
       ) {
         return callback(null, true);
       }
