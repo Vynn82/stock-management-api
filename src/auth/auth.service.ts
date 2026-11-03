@@ -51,11 +51,15 @@ export class AuthService {
   async login(loginDto: LoginDto) {
     const { staffId, password } = loginDto;
 
-    // 1. Find user
+    // 1. Find user (by staffId or email)
     const user = await this.userRepository
       .createQueryBuilder('user')
+      .leftJoin('user.profile', 'profile')
       .addSelect('user.passwordHash')
-      .where('user.staffId = :staffId', { staffId })
+      .where(
+        'user.staffId = :identifier OR LOWER(profile.email) = LOWER(:identifier)',
+        { identifier: staffId.trim() },
+      )
       .getOne();
 
     if (!user) {
