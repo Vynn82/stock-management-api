@@ -3,7 +3,7 @@
 # ==========================================
 
 # 1. Base image with C++ build tools for native modules (bcrypt)
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 WORKDIR /app
 RUN apk add --no-cache libc6-compat python3 make g++
 
@@ -25,7 +25,7 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 # 4. Lean Production Runner
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
