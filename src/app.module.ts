@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 
+import { SchemaGuardService } from './database/schema-guard.service';
 import { LoggerModule } from './common/logger/logger.module';
 import { HttpLoggerMiddleware } from './common/logger/http-logger.middleware';
 import { UsersModule } from './users/users.module';
@@ -108,6 +109,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     HealthModule,
     DashboardModule,
   ],
+  providers: [SchemaGuardService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

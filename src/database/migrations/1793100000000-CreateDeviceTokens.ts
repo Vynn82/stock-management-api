@@ -6,7 +6,7 @@ export class CreateDeviceTokens1793100000000 implements MigrationInterface {
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
-      CREATE TABLE "device_tokens" (
+      CREATE TABLE IF NOT EXISTS "device_tokens" (
         "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
         "user_id" uuid NOT NULL,
         "token" text NOT NULL,
@@ -17,14 +17,14 @@ export class CreateDeviceTokens1793100000000 implements MigrationInterface {
       )
     `);
     await queryRunner.query(
-      `CREATE UNIQUE INDEX "IDX_device_tokens_token" ON "device_tokens" ("token")`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "IDX_device_tokens_token" ON "device_tokens" ("token")`,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_device_tokens_user_id" ON "device_tokens" ("user_id")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_device_tokens_user_id" ON "device_tokens" ("user_id")`,
     );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP TABLE "device_tokens"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "device_tokens"`);
   }
 }
