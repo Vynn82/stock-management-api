@@ -127,19 +127,24 @@ export class StockAdjustmentsController {
   /**
    * One timeline of every stock movement: Stock In, Stock Out, Transfer and
    * Adjustment. Filters: ?kind=IN|OUT|TRANSFER|ADJUSTMENT, ?productId=,
-   * ?page=, ?limit=. Must stay above `:id`.
+   * ?from= and ?to= (ISO timestamps, from <= time < to), ?page=, ?limit=.
+   * Must stay above `:id`.
    */
   @RequirePermission('ADJUSTMENT_VIEW')
   @Get('history')
   history(
     @Query('kind') kind?: string,
     @Query('productId') productId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
     return this.stockAdjustmentsService.history({
       kind,
       productId,
+      from,
+      to,
       page: Number(page),
       limit: Number(limit),
     });
@@ -155,12 +160,16 @@ export class StockAdjustmentsController {
     @Req() req: authenticatedUserInterface.AuthenticatedRequest,
     @Query('kind') kind?: string,
     @Query('productId') productId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
     return this.stockAdjustmentsService.history({
       kind,
       productId,
+      from,
+      to,
       userId: req.user.sub,
       page: Number(page),
       limit: Number(limit),

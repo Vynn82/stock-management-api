@@ -1178,6 +1178,12 @@ export class PurchaseOrdersService {
     if (query.status) {
       qb.andWhere('po.status = :status', { status: query.status });
     }
+    if (query.from) {
+      qb.andWhere('po.createdAt >= :from', { from: new Date(query.from) });
+    }
+    if (query.to) {
+      qb.andWhere('po.createdAt < :to', { to: new Date(query.to) });
+    }
     if (search) {
       qb.andWhere('(po.poNumber ILIKE :search OR supplier.name ILIKE :search)', {
         search: `%${search}%`,

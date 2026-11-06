@@ -1705,6 +1705,8 @@ One timeline of every movement: Stock In, Stock Out, Transfer and Adjustment (di
 
 Query: `?kind=IN|OUT|TRANSFER|ADJUSTMENT&productId=<uuid>&page=1&limit=20`
 
+Optional date filter: `&from=<ISO>&to=<ISO>` returns movements with `from <= time < to`. Either one can be left out. Send ISO timestamps (for example `2026-10-19T17:00:00.000Z`); a plain `2026-10-20` also works. The mobile app sends the phone's local midnights converted to UTC.
+
 Response (`200 OK`):
 
 ```json
@@ -2801,6 +2803,8 @@ DRAFT -> SUBMITTED -> APPROVED -> PARTIALLY_RECEIVED -> RECEIVED
 | `POST` | `/purchase-orders/:id/catalog-added` | `PO_CREATE` | The manager added the received new products to the catalogue |
 
 `status` filter values: `DRAFT`, `SUBMITTED`, `APPROVED`, `REJECTED`, `PARTIALLY_RECEIVED`, `RECEIVED`, `CLOSED`.
+
+The list also takes `?from=<ISO>&to=<ISO>` to filter by the date the order was created (`from <= created < to`).
 
 ### 23.2 Create / Edit a Purchase Order
 

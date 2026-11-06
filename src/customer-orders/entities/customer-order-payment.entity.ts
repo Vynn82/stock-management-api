@@ -81,6 +81,14 @@ export class CustomerOrderPayment {
   })
   remark: string | null;
 
+  /** Photo of the transaction (e.g. a bank transfer receipt), if attached. */
+  @Column({
+    name: 'proof_image_url',
+    type: 'text',
+    nullable: true,
+  })
+  proofImageUrl: string | null;
+
   @CreateDateColumn({
     name: 'created_at',
   })

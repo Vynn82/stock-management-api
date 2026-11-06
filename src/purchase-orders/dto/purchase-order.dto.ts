@@ -5,6 +5,7 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
+  IsISO8601,
   IsNumber,
   IsOptional,
   IsString,
@@ -191,4 +192,14 @@ export class PurchaseOrderQueryDto extends PaginationDto {
     'CLOSED',
   ])
   status?: string;
+
+  /** Created on or after this time (ISO timestamp). */
+  @IsOptional()
+  @IsISO8601()
+  from?: string;
+
+  /** Created before this time (ISO timestamp). */
+  @IsOptional()
+  @IsISO8601()
+  to?: string;
 }

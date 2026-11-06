@@ -15,6 +15,7 @@ import { Stock } from '../stock/entities/stock.entity';
 import { Warehouse } from '../warehouses/entities/warehouse.entity';
 import { TelegramBotService } from './telegram/telegram-bot.service';
 import { TelegramAuthService } from './telegram/telegram-auth.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import { MailsService } from '../mails/mails.service';
 import { CustomerOrderStatus } from './enums/customer-order-status.enum';
@@ -156,6 +157,10 @@ describe('CustomerOrdersService Business Invariant Tests', () => {
         { provide: TelegramBotService, useValue: telegramBotService },
         { provide: TelegramAuthService, useValue: telegramAuthService },
         { provide: MailsService, useValue: mailsService },
+        {
+          provide: NotificationsService,
+          useValue: { notifyNewCustomerOrder: jest.fn().mockResolvedValue(undefined) },
+        },
         { provide: LoyaltyService, useValue: loyaltyService },
       ],
     }).compile();

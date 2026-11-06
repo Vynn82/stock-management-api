@@ -6,8 +6,12 @@ import {
   Post,
   Query,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { paymentProofUploadOptions } from '../common/cloudinary/cloudinary-storage';
 import { CustomerOrdersService } from './customer-orders.service';
 import { TelegramAuthService } from './telegram/telegram-auth.service';
 import { CustomerJwtGuard } from './guards/customer-jwt.guard';
@@ -231,13 +235,24 @@ export class CustomerOrdersController {
     return this.customerOrdersService.markDelivered(id, req.user.sub);
   }
 
+  /**
+   * JSON `{amount, remark?}` as before, or multipart with the same fields plus
+   * an optional `proof` image (photo of the transaction).
+   */
   @Post(':id/payment')
+  @UseInterceptors(FileInterceptor('proof', paymentProofUploadOptions))
   async recordPayment(
     @Param('id') id: string,
     @Req() req: authenticatedUserInterface.AuthenticatedRequest,
     @Body() dto: RecordPaymentDto,
+    @UploadedFile() proof?: Express.Multer.File,
   ) {
-    return this.customerOrdersService.recordCashPayment(id, req.user.sub, dto);
+    return this.customerOrdersService.recordCashPayment(
+      id,
+      req.user.sub,
+      dto,
+      proof?.path,
+    );
   }
 
   @Post(':id/complete')

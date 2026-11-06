@@ -8,6 +8,7 @@ import {
   IsUUID,
   Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class AskCustomerDto {
   @IsString()
@@ -51,6 +52,7 @@ export class CustomerResponseDto {
 }
 
 export class RecordPaymentDto {
+  @Type(() => Number)
   @IsNumber()
   @IsPositive()
   amount: number;

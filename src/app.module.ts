@@ -27,6 +27,7 @@ import { ReportsModule } from './reports/reports.module';
 import { BarcodesModule } from './barcodes/barcodes.module';
 import { CustomerOrdersModule } from './customer-orders/customer-orders.module';
 import { LoyaltyModule } from './loyalty/loyalty.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { HealthModule } from './health/health.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 
@@ -73,6 +74,8 @@ import { DashboardModule } from './dashboard/dashboard.module';
     SessionsModule,
 
     AuthModule,
+
+    NotificationsModule,
 
     MenusModule,
 

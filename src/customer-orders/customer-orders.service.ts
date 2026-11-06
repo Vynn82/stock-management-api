@@ -51,6 +51,7 @@ import {
   getPaginationOptions,
 } from '../common/pagination';
 import { TelegramAuthService } from './telegram/telegram-auth.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 
 @Injectable()
@@ -79,6 +80,7 @@ export class CustomerOrdersService {
     private readonly warehouseRepo: Repository<Warehouse>,
     private readonly telegramBotService: TelegramBotService,
     private readonly telegramAuthService: TelegramAuthService,
+    private readonly notificationsService: NotificationsService,
     private readonly mailsService: MailsService,
     @Inject(forwardRef(() => LoyaltyService))
     private readonly loyaltyService: LoyaltyService,
@@ -376,6 +378,14 @@ export class CustomerOrdersService {
             `Failed to send order creation notification: ${err.message}`,
           ),
         );
+
+      // Push to staff phones (Firebase). Fire-and-forget; never blocks the order.
+      void this.notificationsService.notifyNewCustomerOrder(
+        savedOrder.id,
+        orderNo,
+        customer.contactName || customer.companyName || 'Customer',
+        loyaltyResult.totalAmount,
+      );
 
       // 7. Notify internal Staff via Mails system
       try {
@@ -1693,6 +1703,7 @@ export class CustomerOrdersService {
     orderId: string,
     staffId: string,
     dto: RecordPaymentDto,
+    proofImageUrl?: string,
   ) {
     return this.dataSource.transaction(async (manager: EntityManager) => {
       const order = await manager.findOne(CustomerOrder, {
@@ -1713,6 +1724,7 @@ export class CustomerOrdersService {
         receivedById: staffId,
         receivedAt: new Date(),
         remark: dto.remark || 'Cash received by delivery staff',
+        proofImageUrl: proofImageUrl ?? null,
       });
       await manager.save(CustomerOrderPayment, payment);
 

@@ -816,9 +816,22 @@ export class StockAdjustmentsService {
     productId?: string;
     /** When set, only what this user did (their own adjustments and requests). */
     userId?: string;
+    /** ISO timestamps: only movements with from <= at < to. Either can be left out. */
+    from?: string;
+    to?: string;
     page?: number;
     limit?: number;
   }) {
+    const toDate = (value: string | undefined, name: string) => {
+      if (!value?.trim()) return null;
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        throw new BadRequestException(`${name} must be a valid date`);
+      }
+      return date.toISOString();
+    };
+    const from = toDate(opts.from, 'from');
+    const to = toDate(opts.to, 'to');
     const kinds = ['IN', 'OUT', 'TRANSFER', 'ADJUSTMENT'];
     const kind =
       opts.kind && kinds.includes(opts.kind.toUpperCase())
@@ -920,7 +933,9 @@ export class StockAdjustmentsService {
       )`;
     const where = `WHERE ($1::text IS NULL OR h.kind = $1)
                      AND ($2::uuid IS NULL OR h.product_id = $2::uuid)
-                     AND ($3::uuid IS NULL OR h.owner_id = $3::uuid)`;
+                     AND ($3::uuid IS NULL OR h.owner_id = $3::uuid)
+                     AND ($4::timestamptz IS NULL OR h.at >= $4::timestamptz)
+                     AND ($5::timestamptz IS NULL OR h.at < $5::timestamptz)`;
     const ownerId = opts.userId ?? null;
 
     const [rows, counted] = await Promise.all([
@@ -928,12 +943,12 @@ export class StockAdjustmentsService {
         `${base}
          SELECT * FROM h ${where}
          ORDER BY h.at DESC, h.id
-         LIMIT $4 OFFSET $5`,
-        [kind, productId, ownerId, limit, (page - 1) * limit],
+         LIMIT $6 OFFSET $7`,
+        [kind, productId, ownerId, from, to, limit, (page - 1) * limit],
       ),
       this.dataSource.query(
         `${base} SELECT COUNT(*)::int AS total FROM h ${where}`,
-        [kind, productId, ownerId],
+        [kind, productId, ownerId, from, to],
       ),
     ]);
     const total = Number(counted?.[0]?.total ?? 0);

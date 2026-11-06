@@ -15,6 +15,7 @@ import { Stock } from '../stock/entities/stock.entity';
 import { Warehouse } from '../warehouses/entities/warehouse.entity';
 import { MailsModule } from '../mails/mails.module';
 import { LoyaltyModule } from '../loyalty/loyalty.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 import { CustomerOrdersService } from './customer-orders.service';
 import { CustomerOrdersController } from './customer-orders.controller';
@@ -49,6 +50,7 @@ import { CustomerJwtGuard } from './guards/customer-jwt.guard';
       }),
     }),
     MailsModule,
+    NotificationsModule,
     forwardRef(() => LoyaltyModule),
   ],
   controllers: [

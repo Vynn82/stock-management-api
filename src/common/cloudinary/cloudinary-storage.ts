@@ -76,3 +76,14 @@ export const imageUploadOptions = {
     cb(null, true);
   },
 };
+
+/** Payment proof photos (customer-order transactions). */
+export const paymentProofStorage = createStorage(
+  'stock-management/payment-proofs',
+);
+
+/** Same limits / filter as product images, stored in the payment-proofs folder. */
+export const paymentProofUploadOptions = {
+  ...imageUploadOptions,
+  storage: paymentProofStorage,
+};
