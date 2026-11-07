@@ -444,10 +444,17 @@ export class PurchaseOrdersService {
   // ---------------------------------------------------------------- workflow
 
   /**
-   * Admins / Super Admins a Manager can pick from. Anyone who can approve
-   * purchase orders (PO_APPROVE, or Super Admin), except the caller.
+   * Who the caller may send a purchase order to for approval:
+   *  - Super Admin: nobody (their orders are approved on the spot).
+   *  - Admin: Super Admins only.
+   *  - Anyone else (Manager): Admins or Super Admins.
+   * The caller is never in the list.
    */
   async approvers(userId: string) {
+    const me = await this.accessOf(this.dataSource.manager, userId);
+    if (me.isSuperAdmin) return [];
+    const allowedRoles = this.approverRolesFor(me);
+
     const rows: Array<{ id: string }> = await this.dataSource.query(
       `SELECT DISTINCT u.id
        FROM users u
@@ -457,8 +464,9 @@ export class PurchaseOrdersService {
        LEFT JOIN permissions p ON p.id = rp.permission_id
        WHERE u.status = 'ACTIVE'
          AND u.id <> $1
+         AND r.name = ANY($2)
          AND (r.name = 'SUPER_ADMIN' OR p.name = 'PO_APPROVE')`,
-      [userId],
+      [userId, allowedRoles],
     );
     if (rows.length === 0) return [];
 
@@ -1599,14 +1607,22 @@ export class PurchaseOrdersService {
     }
     return {
       isSuperAdmin,
+      isAdmin: userRoles.some((ur) => ur.role.name === 'ADMIN'),
       canApprove: isSuperAdmin || permissions.has('PO_APPROVE'),
     };
   }
 
+  /** Roles whose holders may approve an order created by someone with this access. */
+  private approverRolesFor(me: { isSuperAdmin: boolean; isAdmin: boolean }) {
+    if (me.isSuperAdmin) return [];
+    // Admin -> Super Admin only. Manager (anyone else) -> Admin or Super Admin.
+    return me.isAdmin ? ['SUPER_ADMIN'] : ['SUPER_ADMIN', 'ADMIN'];
+  }
+
   /**
-   * Sends the order for approval. Admin / Super Admin: approved on the spot,
-   * no request. Anyone else (Manager): must name an Admin / Super Admin, who
-   * then approves or rejects it.
+   * Sends the order for approval. Super Admin: approved on the spot, no
+   * request. Admin: must name a Super Admin. Anyone else (Manager): must name
+   * an Admin or a Super Admin. The chosen person then approves or rejects it.
    */
   private async routeForApproval(
     manager: EntityManager,
@@ -1615,7 +1631,7 @@ export class PurchaseOrdersService {
     approverId?: string,
   ) {
     const me = await this.accessOf(manager, userId);
-    if (me.canApprove) {
+    if (me.isSuperAdmin) {
       po.status = PurchaseOrderStatus.APPROVED;
       po.requestedApproverId = null;
       po.approvedById = userId;
@@ -1640,9 +1656,21 @@ export class PurchaseOrdersService {
     if (!approver) {
       throw new NotFoundException('Approver not found or inactive');
     }
-    if (!(await this.accessOf(manager, approverId)).canApprove) {
+    const target = await this.accessOf(manager, approverId);
+    if (!target.canApprove) {
       throw new BadRequestException(
         'This user is not allowed to approve purchase orders',
+      );
+    }
+    const allowedRoles = this.approverRolesFor(me);
+    const targetOk =
+      (target.isSuperAdmin && allowedRoles.includes('SUPER_ADMIN')) ||
+      (target.isAdmin && allowedRoles.includes('ADMIN'));
+    if (!targetOk) {
+      throw new BadRequestException(
+        me.isAdmin
+          ? 'An Admin must send purchase orders to a Super Admin for approval'
+          : 'Purchase orders must be sent to an Admin or a Super Admin for approval',
       );
     }
 

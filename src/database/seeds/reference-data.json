@@ -1,0 +1,27 @@
+{
+  "categories": [
+    "Phones", "Tablets", "Laptops", "Desktops and Monitors", "TVs and Displays",
+    "Audio", "Cameras", "Wearables", "Networking", "Printers and Scanners",
+    "Accessories", "Cables and Chargers", "Power Banks", "Gaming",
+    "Home Appliances", "Office", "Stationery", "Apparel"
+  ],
+  "brands": [
+    "Apple", "Samsung", "Xiaomi", "OPPO", "Vivo", "Huawei", "Honor", "Realme",
+    "OnePlus", "Infinix", "Tecno", "Sony", "LG", "Panasonic", "Asus", "Acer",
+    "Dell", "HP", "Lenovo", "Logitech", "Anker", "JBL", "Canon", "Epson",
+    "TP-Link", "Rain Design", "Double A", "StockFlow Basics"
+  ],
+  "warehouses": [
+    { "name": "Warehouse A", "location": "Phnom Penh, Cambodia" },
+    { "name": "Warehouse B", "location": "Phnom Penh, Cambodia" },
+    { "name": "Siem Reap Branch", "location": "Siem Reap, Cambodia" },
+    { "name": "Sihanoukville Branch", "location": "Sihanoukville, Cambodia" }
+  ],
+  "suppliers": [
+    { "name": "Sample Mobile Distribution Co., Ltd.", "contactPerson": "Sok Dara", "phone": "012 000 001", "email": "sales@sample-mobile.example", "address": "Phnom Penh, Cambodia" },
+    { "name": "Sample IT Wholesale", "contactPerson": "Chan Vy", "phone": "012 000 002", "email": "orders@sample-it.example", "address": "Phnom Penh, Cambodia" },
+    { "name": "Sample Accessories Trading", "contactPerson": "Srey Neang", "phone": "012 000 003", "email": "hello@sample-acc.example", "address": "Battambang, Cambodia" },
+    { "name": "Sample Office Supply", "contactPerson": "Vannak Chea", "phone": "012 000 004", "email": "contact@sample-office.example", "address": "Siem Reap, Cambodia" }
+  ],
+  "units": ["pcs", "box", "set", "pair", "pack", "ream", "carton"]
+}

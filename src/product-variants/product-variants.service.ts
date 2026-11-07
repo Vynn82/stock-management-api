@@ -257,6 +257,22 @@ export class ProductVariantsService {
     return this.variantRepository.save(variant);
   }
 
+  /** Sets (or replaces) the photo of a variant with an already uploaded image URL. */
+  async updateImage(id: string, imageUrl: string) {
+    const variant = await this.findOne(id);
+    const previous = variant.image;
+    variant.image = imageUrl;
+    await this.variantRepository.save(variant);
+    if (previous && previous !== imageUrl) {
+      try {
+        await deleteCloudinaryImage(previous);
+      } catch {
+        // The old file is just clutter; the new photo is already saved.
+      }
+    }
+    return { message: 'Variant image updated', image: imageUrl };
+  }
+
   // =====================================================
   // DELETE
   // =====================================================

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -8,8 +9,12 @@ import {
   Post,
   Query,
   Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
+import { imageUploadOptions } from '../common/cloudinary/cloudinary-storage';
 
 import { ProductVariantsService } from './product-variants.service';
 import { BarcodesService } from '../barcodes/barcodes.service';
@@ -56,6 +61,20 @@ export class ProductVariantsController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateProductVariantDto) {
     return this.variantsService.update(id, dto);
+  }
+
+  /** Changes the photo of one variant (multipart field "image"). Same permission as the product photo. */
+  @RequirePermission('PRODUCT_IMAGE')
+  @Post(':id/image')
+  @UseInterceptors(FileInterceptor('image', imageUploadOptions))
+  updateImage(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file?.path) {
+      throw new BadRequestException('Image file is required (field "image")');
+    }
+    return this.variantsService.updateImage(id, file.path);
   }
 
   @RequirePermission('PRODUCT_DELETE')

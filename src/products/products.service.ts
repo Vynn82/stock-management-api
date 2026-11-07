@@ -599,6 +599,25 @@ export class ProductsService {
       }
     }
 
+    // A product with variants needs a photo for every variant.
+    if (Array.isArray(variants)) {
+      const missing: string[] = [];
+      variants.forEach((v: any, index: number) => {
+        const code = v?.variantCode ?? v?.code;
+        const hasPhoto =
+          (code && variantImageUrls[code]) ||
+          (typeof v?.image === 'string' && v.image.trim());
+        if (!hasPhoto) {
+          missing.push(v?.variantName ?? v?.name ?? code ?? `#${index + 1}`);
+        }
+      });
+      if (missing.length > 0) {
+        throw new BadRequestException(
+          `Add a photo for every variant. Missing: ${missing.join(', ')}`,
+        );
+      }
+    }
+
     return this.createDirect(dto, userId, productImageUrl, variantImageUrls);
   }
 

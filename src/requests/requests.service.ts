@@ -88,6 +88,18 @@ export class RequestsService {
     return this.create(dto, userId, RequestSource.EXCEL);
   }
 
+  /** Admin and Super Admin see every request; everyone else only their own. */
+  private async canViewAllRequests(userId: string): Promise<boolean> {
+    const rows: Array<{ name: string }> = await this.dataSource.query(
+      `SELECT r.name
+       FROM user_roles ur
+       JOIN roles r ON r.id = ur.role_id
+       WHERE ur.user_id = $1`,
+      [userId],
+    );
+    return rows.some((r) => r.name === 'SUPER_ADMIN' || r.name === 'ADMIN');
+  }
+
   async findAll(userId: string, paginationDto?: PaginationDto) {
     const { limit, skip } = getPaginationOptions(paginationDto);
     const search = paginationDto?.search?.trim();
@@ -100,6 +112,17 @@ export class RequestsService {
       .leftJoinAndSelect('approverUser.profile', 'approverProfile')
       .leftJoinAndSelect('request.requester', 'requester')
       .leftJoinAndSelect('requester.profile', 'requesterProfile');
+
+    // Staff / Manager: only requests that name them (as requester, certifier or approver).
+    if (!(await this.canViewAllRequests(userId))) {
+      queryBuilder.andWhere(
+        `(request.requesterId = :me OR EXISTS (
+          SELECT 1 FROM approvers ap
+          WHERE ap.request_id = request.id AND ap.user_id = :me
+        ))`,
+        { me: userId },
+      );
+    }
 
     if (search) {
       queryBuilder.andWhere(
@@ -135,6 +158,13 @@ export class RequestsService {
     });
 
     if (!request) {
+      throw new NotFoundException(`Request with ID ${id} not found`);
+    }
+
+    const involved =
+      request.requesterId === userId ||
+      (request.approvers ?? []).some((a) => a.userId === userId);
+    if (!involved && !(await this.canViewAllRequests(userId))) {
       throw new NotFoundException(`Request with ID ${id} not found`);
     }
 
@@ -1791,6 +1821,22 @@ export class RequestsService {
 
     const approvers: Approver[] = [];
 
+    // A new product goes up the ladder: Staff -> Manager / Admin / Super Admin,
+    // Manager -> Admin / Super Admin, Admin -> Super Admin.
+    let allowedApproverRoles: string[] | null = null;
+    if (dto.requestType === RequestType.PRODUCT_CREATE) {
+      const mine: Array<{ name: string }> = await manager.query(
+        `SELECT r.name FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = $1`,
+        [requesterId],
+      );
+      const names = mine.map((r) => r.name);
+      if (names.includes('SUPER_ADMIN')) allowedApproverRoles = null;
+      else if (names.includes('ADMIN')) allowedApproverRoles = ['SUPER_ADMIN'];
+      else if (names.includes('MANAGER'))
+        allowedApproverRoles = ['ADMIN', 'SUPER_ADMIN'];
+      else allowedApproverRoles = ['MANAGER', 'ADMIN', 'SUPER_ADMIN'];
+    }
+
     for (let index = 0; index < approverDtos.length; index++) {
       const approverDto = approverDtos[index];
       if (approverDto.userId === requesterId) {
@@ -1822,6 +1868,14 @@ export class RequestsService {
         if (!canApprove) {
           throw new BadRequestException(
             `User ${user.staffId} cannot be an approver. Only ADMIN, MANAGER, or SUPER_ADMIN can be approvers.`,
+          );
+        }
+        if (
+          allowedApproverRoles &&
+          !roles.some((role) => allowedApproverRoles.includes(role))
+        ) {
+          throw new BadRequestException(
+            `User ${user.staffId} cannot approve your new product. Choose ${allowedApproverRoles.join(' or ')}.`,
           );
         }
       }
