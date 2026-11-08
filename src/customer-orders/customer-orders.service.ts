@@ -939,59 +939,86 @@ export class CustomerOrdersService {
         );
       }
 
-      // Default or lookup warehouse
-      let warehouse: Warehouse | null = null;
+      // A warehouse named by the caller is used as is. Otherwise each item is
+      // taken from a warehouse that really holds it (oldest warehouse first),
+      // so stock sitting in a second warehouse is not reported as "0".
+      let chosen: Warehouse | null = null;
       if (warehouseCode) {
-        warehouse = await manager.findOne(Warehouse, {
+        chosen = await manager.findOne(Warehouse, {
           where: { code: warehouseCode, isActive: true },
         });
+        if (!chosen) {
+          throw new BadRequestException(
+            `Warehouse ${warehouseCode} not found or inactive`,
+          );
+        }
       }
-      if (!warehouse) {
-        warehouse = await manager.findOne(Warehouse, {
-          where: { isActive: true },
-          order: { createdAt: 'ASC' },
-        });
-      }
-      if (!warehouse)
+      const activeWarehouses = await manager.find(Warehouse, {
+        where: { isActive: true },
+        order: { createdAt: 'ASC' },
+      });
+      if (activeWarehouses.length === 0) {
         throw new BadRequestException(
           'No active warehouse available to fulfill stock',
         );
+      }
+      const candidates = chosen ? [chosen] : activeWarehouses;
 
       // Check and reserve stock with row-level lock
       for (const item of order.items) {
         const requiredQty = Number(item.requestedQuantity);
 
-        // Lock Stock row for update
-        const stockQuery = manager
-          .createQueryBuilder(Stock, 'stock')
-          .setLock('pessimistic_write')
-          .where('stock.product_id = :productId', { productId: item.productId })
-          .andWhere('stock.warehouse_id = :warehouseId', {
-            warehouseId: warehouse.id,
-          });
+        let warehouse: Warehouse | null = null;
+        let stock: Stock | null = null;
+        let availableQty = 0;
+        let bestSeen = 0;
+        let totalSeen = 0;
 
-        if (item.variantId) {
-          stockQuery.andWhere('stock.variant_id = :variantId', {
-            variantId: item.variantId,
-          });
-        } else {
-          stockQuery.andWhere('stock.variant_id IS NULL');
+        for (const candidate of candidates) {
+          // Lock Stock row for update
+          const stockQuery = manager
+            .createQueryBuilder(Stock, 'stock')
+            .setLock('pessimistic_write')
+            .where('stock.product_id = :productId', {
+              productId: item.productId,
+            })
+            .andWhere('stock.warehouse_id = :warehouseId', {
+              warehouseId: candidate.id,
+            });
+
+          if (item.variantId) {
+            stockQuery.andWhere('stock.variant_id = :variantId', {
+              variantId: item.variantId,
+            });
+          } else {
+            stockQuery.andWhere('stock.variant_id IS NULL');
+          }
+
+          const row = await stockQuery.getOne();
+          const qty = row ? Math.max(0, Number(row.quantity)) : 0;
+          totalSeen += qty;
+          bestSeen = Math.max(bestSeen, qty);
+          if (row && qty >= requiredQty) {
+            warehouse = candidate;
+            stock = row;
+            availableQty = qty;
+            break;
+          }
         }
 
-        const stock = await stockQuery.getOne();
-        const availableQty = stock ? Number(stock.quantity) : 0;
-
-        if (availableQty < requiredQty) {
+        if (!warehouse || !stock) {
+          const detail =
+            candidates.length > 1 && totalSeen > bestSeen
+              ? `Available: ${totalSeen} in total, but at most ${bestSeen} in a single warehouse`
+              : `Available: ${bestSeen}`;
           throw new BadRequestException(
-            `Insufficient stock for item. Available: ${availableQty}, Requested: ${requiredQty}. Use "Ask Customer" or "Confirm Quantity" for partial fulfillment.`,
+            `Insufficient stock for item. ${detail}, Requested: ${requiredQty}. Use "Ask Customer" or "Confirm Quantity" for partial fulfillment.`,
           );
         }
 
         // Deduct approved stock
-        if (stock) {
-          stock.quantity = availableQty - requiredQty;
-          await manager.save(Stock, stock);
-        }
+        stock.quantity = availableQty - requiredQty;
+        await manager.save(Stock, stock);
 
         // Update item quantities
         item.approvedQuantity = requiredQty;

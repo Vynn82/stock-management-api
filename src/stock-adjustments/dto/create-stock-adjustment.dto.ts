@@ -1,6 +1,7 @@
 import {
   IsArray,
   IsEnum,
+  IsIn,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -41,6 +42,11 @@ export class CreateStockAdjustmentItemDto {
   @IsOptional()
   @IsString()
   location?: string;
+
+  /** 'IN' / 'OUT' labels the movement as Stock In / Stock Out in history; leave out for a normal adjustment. */
+  @IsOptional()
+  @IsIn(['IN', 'OUT'])
+  movementType?: 'IN' | 'OUT';
 }
 
 export class CreateStockAdjustmentDto {
@@ -77,4 +83,8 @@ export class CreateStockAdjustmentDto {
   @IsOptional()
   @IsString()
   location?: string;
+
+  @IsOptional()
+  @IsIn(['IN', 'OUT'])
+  movementType?: 'IN' | 'OUT';
 }

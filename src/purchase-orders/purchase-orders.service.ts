@@ -445,14 +445,13 @@ export class PurchaseOrdersService {
 
   /**
    * Who the caller may send a purchase order to for approval:
-   *  - Super Admin: nobody (their orders are approved on the spot).
-   *  - Admin: Super Admins only.
-   *  - Anyone else (Manager): Admins or Super Admins.
+   *  - Super Admin, Admin and Manager: nobody (their orders are approved on the spot).
+   *  - Anyone else: Admins or Super Admins.
    * The caller is never in the list.
    */
   async approvers(userId: string) {
     const me = await this.accessOf(this.dataSource.manager, userId);
-    if (me.isSuperAdmin) return [];
+    if (me.isSelfApproving) return [];
     const allowedRoles = this.approverRolesFor(me);
 
     const rows: Array<{ id: string }> = await this.dataSource.query(
@@ -1608,6 +1607,11 @@ export class PurchaseOrdersService {
     return {
       isSuperAdmin,
       isAdmin: userRoles.some((ur) => ur.role.name === 'ADMIN'),
+      isManager: userRoles.some((ur) => ur.role.name === 'MANAGER'),
+      /** Super Admin, Admin and Manager orders are approved on the spot. */
+      isSelfApproving: userRoles.some((ur) =>
+        ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(ur.role.name),
+      ),
       canApprove: isSuperAdmin || permissions.has('PO_APPROVE'),
     };
   }
@@ -1620,9 +1624,9 @@ export class PurchaseOrdersService {
   }
 
   /**
-   * Sends the order for approval. Super Admin: approved on the spot, no
-   * request. Admin: must name a Super Admin. Anyone else (Manager): must name
-   * an Admin or a Super Admin. The chosen person then approves or rejects it.
+   * Sends the order for approval. Super Admin, Admin and Manager: approved on
+   * the spot, no request to anyone. Anyone else must name an Admin or a Super
+   * Admin, who then approves or rejects it.
    */
   private async routeForApproval(
     manager: EntityManager,
@@ -1631,7 +1635,7 @@ export class PurchaseOrdersService {
     approverId?: string,
   ) {
     const me = await this.accessOf(manager, userId);
-    if (me.isSuperAdmin) {
+    if (me.isSelfApproving) {
       po.status = PurchaseOrderStatus.APPROVED;
       po.requestedApproverId = null;
       po.approvedById = userId;

@@ -22,6 +22,8 @@ export class SchemaGuardService implements OnModuleInit {
     const statements = [
       // Photo of a payment transaction (kept for the external platform / staff imports).
       `ALTER TABLE "customer_order_payments" ADD COLUMN IF NOT EXISTS "proof_image_url" text`,
+      // Direct Stock In / Stock Out are labelled as such in the history (null = plain adjustment).
+      `ALTER TABLE "stock_adjustments" ADD COLUMN IF NOT EXISTS "movement_type" character varying(20)`,
       // Staff phones registered for push notifications.
       `CREATE TABLE IF NOT EXISTS "device_tokens" (
         "id" uuid NOT NULL DEFAULT uuid_generate_v4(),

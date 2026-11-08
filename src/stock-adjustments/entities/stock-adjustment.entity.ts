@@ -124,6 +124,15 @@ export class StockAdjustment {
   })
   adjustmentType: 'INCREASE' | 'DECREASE';
 
+  /** How the movement is labelled in history: 'IN' / 'OUT' (direct Stock In / Stock Out), null = a plain adjustment. */
+  @Column({
+    name: 'movement_type',
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+  })
+  movementType: 'IN' | 'OUT' | null;
+
   @Column({
     type: 'decimal',
     precision: 15,

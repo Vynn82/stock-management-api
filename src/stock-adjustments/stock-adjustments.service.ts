@@ -456,6 +456,12 @@ export class StockAdjustmentsService {
           variantId: variant ? variant.id : null,
           warehouseId: warehouse.id,
           adjustmentType: resolvedType,
+          movementType:
+            item.movementType === 'IN' && resolvedType === 'INCREASE'
+              ? 'IN'
+              : item.movementType === 'OUT' && resolvedType === 'DECREASE'
+                ? 'OUT'
+                : null,
           quantity: absoluteQty,
           reason: item.reason.trim(),
         });
@@ -858,7 +864,7 @@ export class StockAdjustmentsService {
     const base = `
       WITH h AS (
         SELECT sa.id::text AS id,
-               'ADJUSTMENT' AS kind,
+               COALESCE(sa.movement_type, 'ADJUSTMENT') AS kind,
                sa.created_at AS at,
                p.id AS product_id,
                p.code AS product_code,
@@ -868,7 +874,8 @@ export class StockAdjustmentsService {
                CASE WHEN sa.adjustment_type = 'INCREASE' THEN w.name END AS to_warehouse,
                sa.quantity::float8 AS quantity,
                sa.reason AS reason,
-               u.staff_id AS by_staff,
+               COALESCE(NULLIF(TRIM(CONCAT_WS(' ', up.first_name, up.last_name)), ''), u.staff_id) AS by_staff,
+               u.staff_id AS by_staff_id,
                r.request_no AS request_no,
                COALESCE(sa.adjusted_by_id, r.requester_id) AS owner_id
         FROM stock_adjustments sa
@@ -876,6 +883,7 @@ export class StockAdjustmentsService {
         JOIN warehouses w ON w.id = sa.warehouse_id
         LEFT JOIN product_variants v ON v.id = sa.variant_id
         LEFT JOIN users u ON u.id = sa.adjusted_by_id
+        LEFT JOIN user_profiles up ON up.user_id = u.id
         LEFT JOIN requests r ON r.id = sa.request_id
 
         UNION ALL
@@ -891,7 +899,8 @@ export class StockAdjustmentsService {
                tw.name AS to_warehouse,
                st.quantity::float8 AS quantity,
                st.reason AS reason,
-               u.staff_id AS by_staff,
+               COALESCE(NULLIF(TRIM(CONCAT_WS(' ', up.first_name, up.last_name)), ''), u.staff_id) AS by_staff,
+               u.staff_id AS by_staff_id,
                NULL::text AS request_no,
                st.transferred_by_id AS owner_id
         FROM stock_transfers st
@@ -900,6 +909,7 @@ export class StockAdjustmentsService {
         JOIN warehouses tw ON tw.id = st.to_warehouse_id
         LEFT JOIN product_variants v ON v.id = st.variant_id
         LEFT JOIN users u ON u.id = st.transferred_by_id
+        LEFT JOIN user_profiles up ON up.user_id = u.id
 
         UNION ALL
 
@@ -918,7 +928,8 @@ export class StockAdjustmentsService {
                                    WHEN 'STOCK_TRANSFER' THEN tw.name END AS to_warehouse,
                ri.quantity::float8 AS quantity,
                COALESCE(NULLIF(TRIM(ri.adjustment_reason), ''), r.remark) AS reason,
-               u.staff_id AS by_staff,
+               COALESCE(NULLIF(TRIM(CONCAT_WS(' ', up.first_name, up.last_name)), ''), u.staff_id) AS by_staff,
+               u.staff_id AS by_staff_id,
                r.request_no AS request_no,
                r.requester_id AS owner_id
         FROM request_items ri
@@ -928,6 +939,7 @@ export class StockAdjustmentsService {
         LEFT JOIN warehouses fw ON fw.code = ri.from_warehouse_code
         LEFT JOIN warehouses tw ON tw.code = ri.to_warehouse_code
         LEFT JOIN users u ON u.id = r.requester_id
+        LEFT JOIN user_profiles up ON up.user_id = u.id
         WHERE r.status = 'APPROVED'
           AND r.request_type IN ('STOCK_IN', 'STOCK_OUT', 'STOCK_TRANSFER')
       )`;
@@ -967,6 +979,7 @@ export class StockAdjustmentsService {
         quantity: Number(r.quantity),
         reason: r.reason,
         byStaff: r.by_staff,
+        byStaffId: r.by_staff_id,
         requestNo: r.request_no,
       })),
       total,

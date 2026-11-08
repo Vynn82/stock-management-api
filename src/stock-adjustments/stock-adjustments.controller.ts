@@ -59,6 +59,7 @@ export class StockAdjustmentsController {
           quantity: dto.quantity as number,
           reason: dto.reason as string,
           location: dto.location,
+          movementType: dto.movementType,
         },
       ];
     } else {
