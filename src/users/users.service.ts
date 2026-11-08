@@ -15,6 +15,8 @@ import { UserProfile } from './entities/user-profile.entity';
 import { UserRole } from './entities/user-role.entity';
 
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateMyProfileDto } from './dto/update-my-profile.dto';
+import { deleteCloudinaryImage } from '../common/cloudinary/cloudinary.utils';
 import { Role } from '../roles/role.entity';
 import { MailService } from '../mail/mail.service';
 import { Permission } from '../permissions/permission.entity';
@@ -309,6 +311,64 @@ export class UsersService {
 
   return this.getRoles(userId);
 }
+
+  /** A signed-in person edits their own name, email and phone. */
+  async updateMe(userId: string, dto: UpdateMyProfileDto) {
+    const profile = await this.userProfileRepository.findOne({
+      where: { userId },
+    });
+    if (!profile) throw new NotFoundException('Profile not found');
+
+    if (dto.fullName !== undefined) {
+      const parts = dto.fullName.trim().split(/\s+/).filter(Boolean);
+      if (parts.length === 0) {
+        throw new BadRequestException('Name cannot be empty');
+      }
+      profile.firstName = parts[0];
+      profile.lastName = parts.slice(1).join(' ');
+    }
+
+    if (dto.email !== undefined) {
+      const email = dto.email.trim().toLowerCase();
+      if (email !== profile.email.toLowerCase()) {
+        const taken = await this.userProfileRepository
+          .createQueryBuilder('p')
+          .where('LOWER(p.email) = :email', { email })
+          .andWhere('p.userId <> :userId', { userId })
+          .getOne();
+        if (taken) {
+          throw new ConflictException('This email is already used by someone else');
+        }
+        profile.email = email;
+      }
+    }
+
+    if (dto.phone !== undefined) {
+      profile.phone = dto.phone.trim() || null;
+    }
+
+    await this.userProfileRepository.save(profile);
+    return this.getMe(userId);
+  }
+
+  /** Sets (or replaces) the profile photo with an already uploaded image URL. */
+  async updateMyAvatar(userId: string, imageUrl: string) {
+    const profile = await this.userProfileRepository.findOne({
+      where: { userId },
+    });
+    if (!profile) throw new NotFoundException('Profile not found');
+    const previous = profile.avatar;
+    profile.avatar = imageUrl;
+    await this.userProfileRepository.save(profile);
+    if (previous && previous !== imageUrl) {
+      try {
+        await deleteCloudinaryImage(previous);
+      } catch {
+        // The old file is just clutter; the new photo is already saved.
+      }
+    }
+    return this.getMe(userId);
+  }
 
   async getMe(userId: string) {
     const user = await this.userRepository.findOne({

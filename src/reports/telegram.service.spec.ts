@@ -41,6 +41,16 @@ describe('TelegramService', () => {
     lowStockWarnings: [],
   };
 
+  // `jest.spyOn(global, 'fetch')` + `restoreAllMocks()` removes Node's lazy
+  // global fetch after the first test, so later spies fail with "Property
+  // `fetch` does not exist". Assign a plain mock and put the original back.
+  const realFetch = (global as any).fetch;
+  const stubFetch = (impl: (...args: any[]) => any) => {
+    const fn = jest.fn(impl);
+    (global as any).fetch = fn;
+    return fn;
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -78,6 +88,7 @@ describe('TelegramService', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+    (global as any).fetch = realFetch;
   });
 
   it('should be defined', () => {
@@ -85,9 +96,7 @@ describe('TelegramService', () => {
   });
 
   it('should send both Telegram summary message and PDF document successfully', async () => {
-    const mockFetch = jest
-      .spyOn(global, 'fetch')
-      .mockImplementation((url: any) => {
+    const mockFetch = stubFetch((url: any) => {
         const urlStr = url.toString();
         if (urlStr.includes('/sendMessage')) {
           return Promise.resolve({
@@ -120,7 +129,7 @@ describe('TelegramService', () => {
       .spyOn(pdfService, 'generateReportPdf')
       .mockRejectedValueOnce(new Error('PDF generation engine failed'));
 
-    jest.spyOn(global, 'fetch').mockImplementation(() => {
+    stubFetch(() => {
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ ok: true, result: { message_id: 101 } }),
@@ -135,7 +144,7 @@ describe('TelegramService', () => {
 
   it('should still succeed with summary delivery if sendDocument fails', async () => {
     jest.spyOn((service as any).logger, 'error').mockImplementation(() => {});
-    jest.spyOn(global, 'fetch').mockImplementation(async (url: any) => {
+    stubFetch(async (url: any) => {
       const urlStr = url.toString();
       if (urlStr.includes('/sendMessage')) {
         return Promise.resolve({

@@ -298,6 +298,11 @@ describe('CustomerOrdersService Business Invariant Tests', () => {
         if (entity === Warehouse) return Promise.resolve(mockWarehouse);
         return Promise.resolve(null);
       });
+      // acceptOrder lists the active warehouses and takes stock from the first
+      // one that really holds the item.
+      dataSource.manager.find.mockImplementation((entity: any) =>
+        Promise.resolve(entity === Warehouse ? [mockWarehouse] : []),
+      );
 
       const queryBuilder = {
         setLock: jest.fn().mockReturnThis(),

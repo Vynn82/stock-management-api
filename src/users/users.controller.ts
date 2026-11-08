@@ -1,13 +1,20 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Put,
   Query,
   Req,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { imageUploadOptions } from '../common/cloudinary/cloudinary-storage';
+import { UpdateMyProfileDto } from './dto/update-my-profile.dto';
 
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -64,5 +71,27 @@ export class UsersController {
   @Get('me')
   getMe(@Req() req: authenticatedUserInterface.AuthenticatedRequest) {
     return this.usersService.getMe(req.user.sub);
+  }
+
+  /** The signed-in person edits their own name / email / phone. */
+  @Patch('me')
+  updateMe(
+    @Body() dto: UpdateMyProfileDto,
+    @Req() req: authenticatedUserInterface.AuthenticatedRequest,
+  ) {
+    return this.usersService.updateMe(req.user.sub, dto);
+  }
+
+  /** Changes the signed-in person's photo (multipart field "image"). */
+  @Post('me/avatar')
+  @UseInterceptors(FileInterceptor('image', imageUploadOptions))
+  updateMyAvatar(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: authenticatedUserInterface.AuthenticatedRequest,
+  ) {
+    if (!file?.path) {
+      throw new BadRequestException('Image file is required (field "image")');
+    }
+    return this.usersService.updateMyAvatar(req.user.sub, file.path);
   }
 }
