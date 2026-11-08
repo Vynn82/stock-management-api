@@ -651,9 +651,10 @@ export class TelegramAuthService {
     qb.skip((page - 1) * limit).take(limit);
 
     const [items, totalItems] = await qb.getManyAndCount();
+    const stats = await this.orderStatsFor(items.map((c) => c.id));
 
     return {
-      items,
+      items: items.map((c) => ({ ...c, ...stats(c.id) })),
       meta: {
         totalItems,
         itemCount: items.length,
@@ -662,6 +663,40 @@ export class TelegramAuthService {
         currentPage: page,
       },
     };
+  }
+
+  /** How many orders each customer placed (all statuses) and when the last one was. */
+  private async orderStatsFor(customerIds: string[]) {
+    const byId = new Map<string, { orderCount: number; lastOrderAt: Date | null }>();
+    if (customerIds.length > 0) {
+      const rows: Array<{ customer_id: string; cnt: string; last: Date | null }> =
+        await this.dataSource.query(
+          `SELECT customer_id, COUNT(*) AS cnt, MAX(created_at) AS last
+           FROM customer_orders
+           WHERE customer_id = ANY($1::uuid[])
+           GROUP BY customer_id`,
+          [customerIds],
+        );
+      for (const r of rows) {
+        byId.set(r.customer_id, { orderCount: Number(r.cnt), lastOrderAt: r.last });
+      }
+    }
+    return (id: string) => byId.get(id) ?? { orderCount: 0, lastOrderAt: null };
+  }
+
+  /** One customer with Telegram accounts, loyalty tier and order totals (staff view). */
+  async getCustomerForStaff(customerId: string) {
+    const customer = await this.customerRepo.findOne({
+      where: { id: customerId },
+      relations: {
+        telegramAccounts: true,
+        loyaltyTier: true,
+        manualTierOverride: true,
+      },
+    });
+    if (!customer) throw new NotFoundException('Customer not found');
+    const stats = await this.orderStatsFor([customer.id]);
+    return { ...customer, ...stats(customer.id) };
   }
 
   async approveCustomer(customerId: string, staffId: string) {

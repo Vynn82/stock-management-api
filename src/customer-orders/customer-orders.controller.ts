@@ -111,6 +111,11 @@ export class CustomerOrdersController {
     return this.telegramAuthService.findAllCustomersForStaff(query);
   }
 
+  @Get('customers/:id')
+  async findOneCustomer(@Param('id') id: string) {
+    return this.telegramAuthService.getCustomerForStaff(id);
+  }
+
   @Post('customers/:id/approve')
   async approveCustomer(
     @Param('id') id: string,

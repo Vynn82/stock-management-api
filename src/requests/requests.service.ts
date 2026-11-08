@@ -288,6 +288,51 @@ export class RequestsService {
         await manager.save(RequestItem, requestItems);
       }
 
+      // Super Admin / Admin / Manager: no approval chain. The request is kept
+      // as a record, approved by its requester, and applied right away.
+      if (await this.isSelfApproving(manager, requesterId)) {
+        await manager.save(
+          Approver,
+          manager.create(Approver, {
+            requestId: savedRequest.id,
+            userId: requesterId,
+            step: 1,
+            actionType: ApproverActionType.APPROVER,
+            status: ApproverStatus.APPROVED,
+            actionDate: new Date(),
+            remark: 'Approved automatically (no approval needed)',
+          }),
+        );
+        const full = await manager.findOne(Request, {
+          where: { id: savedRequest.id },
+          relations: { items: true, approvers: true },
+        });
+        if (!full) throw new NotFoundException('Request not found');
+        await this.applyApprovedRequest(manager, full);
+        full.status = RequestStatus.APPROVED;
+        await manager.save(Request, full);
+
+        await this.mailService.createMail({
+          recipientId: requesterId,
+          requestId: full.id,
+          requestType: full.requestType,
+          subject: `${full.requestType} request applied`,
+          message: `Your request ${full.requestNo} was applied right away (no approval needed).`,
+          action: 'APPROVED',
+          requestUrl: `/requests/${full.id}`,
+        });
+
+        return {
+          message: 'Request applied successfully',
+          requestId: full.id,
+          requestNo: full.requestNo,
+          requestType: full.requestType,
+          source: full.source,
+          status: full.status,
+          currentStep: full.currentStep,
+        };
+      }
+
       const approvers = await this.buildApprovers(
         dto,
         savedRequest.id,
@@ -839,72 +884,7 @@ export class RequestsService {
       // 13. PROCESS REQUEST
       // =====================================================
 
-      switch (request.requestType) {
-        case RequestType.PRODUCT_CREATE: {
-          const product = await this.createProductFromRequest(manager, request);
-
-          const variants = await this.createProductVariantsFromRequest(
-            manager,
-            request,
-            product,
-          );
-
-          await this.createStocksFromRequest(
-            manager,
-            request,
-            product,
-            variants,
-          );
-
-          break;
-        }
-
-        case RequestType.PRODUCT_UPDATE: {
-          await this.createProductFromRequest(manager, request);
-
-          break;
-        }
-
-        case RequestType.VARIANT_CREATE:
-        case RequestType.VARIANT_UPDATE: {
-          const product = await this.createProductFromRequest(manager, request);
-
-          await this.createProductVariantsFromRequest(
-            manager,
-            request,
-            product,
-          );
-
-          break;
-        }
-
-        // case RequestType.STOCK_IN:
-
-        case RequestType.STOCK_IN: {
-          await this.stockInFromRequest(manager, request);
-          break;
-        }
-
-        case RequestType.STOCK_OUT: {
-          await this.stockOutFromRequest(manager, request);
-          break;
-        }
-
-        case RequestType.STOCK_TRANSFER: {
-          await this.stockTransferFromRequest(manager, request);
-          break;
-        }
-
-        case RequestType.STOCK_ADJUSTMENT: {
-          await this.adjustStockFromRequest(manager, request);
-          break;
-        }
-
-        default:
-          throw new BadRequestException(
-            `Unsupported request type: ${request.requestType}`,
-          );
-      }
+      await this.applyApprovedRequest(manager, request);
 
       // =====================================================
       // 14. MARK REQUEST AS FULLY APPROVED
@@ -942,11 +922,95 @@ export class RequestsService {
   }
 
   /**
+   * Carries out a fully approved request: creates the product / variants /
+   * stock, or moves the stock. Shared by the normal approval and by
+   * requests that need no approval.
+   */
+  private async applyApprovedRequest(manager: EntityManager, request: Request) {
+    switch (request.requestType) {
+      case RequestType.PRODUCT_CREATE: {
+        const product = await this.createProductFromRequest(manager, request);
+
+        const variants = await this.createProductVariantsFromRequest(
+          manager,
+          request,
+          product,
+        );
+
+        await this.createStocksFromRequest(
+          manager,
+          request,
+          product,
+          variants,
+        );
+
+        break;
+      }
+
+      case RequestType.PRODUCT_UPDATE: {
+        await this.createProductFromRequest(manager, request);
+
+        break;
+      }
+
+      case RequestType.VARIANT_CREATE:
+      case RequestType.VARIANT_UPDATE: {
+        const product = await this.createProductFromRequest(manager, request);
+
+        await this.createProductVariantsFromRequest(
+          manager,
+          request,
+          product,
+        );
+
+        break;
+      }
+
+      // case RequestType.STOCK_IN:
+
+      case RequestType.STOCK_IN: {
+        await this.stockInFromRequest(manager, request);
+        break;
+      }
+
+      case RequestType.STOCK_OUT: {
+        await this.stockOutFromRequest(manager, request);
+        break;
+      }
+
+      case RequestType.STOCK_TRANSFER: {
+        await this.stockTransferFromRequest(manager, request);
+        break;
+      }
+
+      case RequestType.STOCK_ADJUSTMENT: {
+        await this.adjustStockFromRequest(manager, request);
+        break;
+      }
+
+      default:
+        throw new BadRequestException(
+          `Unsupported request type: ${request.requestType}`,
+        );
+    }
+  }
+
+  /** Super Admin, Admin and Manager need nobody's approval; only Staff requests are reviewed. */
+  private async isSelfApproving(manager: EntityManager, userId: string) {
+    const rows: Array<{ name: string }> = await manager.query(
+      `SELECT r.name FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = $1`,
+      [userId],
+    );
+    return rows.some((r) => ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(r.name));
+  }
+
+  /**
    * Active users the current user may put in the approval chain.
    * STAFF cannot call the users API, so the request screen uses this.
    * Only ADMIN / MANAGER / SUPER_ADMIN can be an APPROVER (see buildApprovers).
    */
   async findApproverCandidates(userId: string) {
+    if (await this.isSelfApproving(this.dataSource.manager, userId)) return [];
     const users = await this.userRepository
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.profile', 'profile')

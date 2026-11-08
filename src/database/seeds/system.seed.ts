@@ -199,14 +199,16 @@ export async function seedSystem(dataSource: DataSource): Promise<void> {
       ],
 
       // MANAGER: supervises staff, reads everything, certifies AND approves requests.
-      // Changes to data go through requests (no direct create / adjust), except
-      // moving stock between warehouses (STOCK_TRANSFER).
+      // Needs nobody's approval: creates products and changes / moves stock
+      // directly. Only Staff requests are reviewed.
       MANAGER: [
         'USER_VIEW',
         'USER_CREATE',
         'USER_ROLE_UPDATE',
 
         ...READ_ONLY,
+        'PRODUCT_CREATE',
+        'STOCK_ADJUST',
         'STOCK_TRANSFER',
         'ADJUSTMENT_VIEW',
 
