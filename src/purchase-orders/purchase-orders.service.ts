@@ -342,10 +342,42 @@ export class PurchaseOrdersService {
     });
 
     const errorCount = rows.filter((r) => r.error).length;
+
+    // Optional supplier_code / warehouse_code columns: they describe the whole
+    // order, so every filled cell must agree and point to an active record.
+    const headerErrors: string[] = [];
+    const single = (label: string, values: (string | null)[]) => {
+      const distinct = [...new Set(values.filter((v): v is string => !!v))];
+      if (distinct.length > 1) {
+        headerErrors.push(
+          `Only one ${label} per file (found ${distinct.join(', ')})`,
+        );
+        return null;
+      }
+      return distinct[0] ?? null;
+    };
+    const supplierCode = single('supplier', parsed.map((r) => r.supplierCode));
+    const warehouseCode = single('warehouse', parsed.map((r) => r.warehouseCode));
+    let supplier: { code: string; name: string } | null = null;
+    let warehouse: { code: string; name: string } | null = null;
+    if (supplierCode) {
+      const s = await manager.findOne(Supplier, { where: { code: supplierCode, isActive: true } });
+      if (s) supplier = { code: s.code, name: s.name };
+      else headerErrors.push(`Supplier "${supplierCode}" not found or inactive`);
+    }
+    if (warehouseCode) {
+      const w = await manager.findOne(Warehouse, { where: { code: warehouseCode, isActive: true } });
+      if (w) warehouse = { code: w.code, name: w.name };
+      else headerErrors.push(`Warehouse "${warehouseCode}" not found or inactive`);
+    }
+
     return {
       rows,
       validCount: rows.length - errorCount,
       errorCount,
+      supplier,
+      warehouse,
+      headerErrors,
     };
   }
 
@@ -438,6 +470,12 @@ export class PurchaseOrdersService {
           .map((v) => ({ code: v.code, name: v.name, sku: v.sku })),
       })),
       categories: categories.map((c) => ({ code: c.code, name: c.name })),
+      suppliers: (
+        await this.dataSource.manager.find(Supplier, { where: { isActive: true }, order: { code: 'ASC' }, take: 300 })
+      ).map((s) => ({ code: s.code, name: s.name })),
+      warehouses: (
+        await this.dataSource.manager.find(Warehouse, { where: { isActive: true }, order: { code: 'ASC' }, take: 300 })
+      ).map((w) => ({ code: w.code, name: w.name })),
     });
   }
 

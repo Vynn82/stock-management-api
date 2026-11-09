@@ -14,6 +14,9 @@ export interface PurchaseOrderImportRow {
   categoryCode: string | null;
   unit: string | null;
   sku: string | null;
+  /** Optional: the supplier / warehouse of the whole order (same on every row). */
+  supplierCode: string | null;
+  warehouseCode: string | null;
 }
 
 export const PO_IMPORT_MAX_ROWS = 500;
@@ -27,6 +30,8 @@ export interface PoTemplateReference {
     variants: { code: string; name: string; sku: string }[];
   }[];
   categories: { code: string; name: string }[];
+  suppliers?: { code: string; name: string }[];
+  warehouses?: { code: string; name: string }[];
 }
 
 /** Reads / writes the Excel (or CSV) used to fill a purchase order's products. */
@@ -41,25 +46,35 @@ export class PurchaseOrdersExcelService {
     'category_code',
     'unit',
     'sku',
+    'supplier_code',
+    'warehouse_code',
   ];
 
   generateTemplate(ref?: PoTemplateReference): Buffer {
     const products = ref?.products ?? [];
     const categories = ref?.categories ?? [];
+    const suppliers = ref?.suppliers ?? [];
+    const warehouses = ref?.warehouses ?? [];
+    // The order's supplier / warehouse go on the first row only (they apply to the whole file).
+    const orderCols = [suppliers[0]?.code ?? '', warehouses[0]?.code ?? ''];
     const plain = products.find((p) => p.variants.length === 0);
     const withVariants = products.find((p) => p.variants.length > 0);
 
     // Sample rows use real codes from the database so the file imports as-is.
     const samples: any[][] = [];
-    if (plain) samples.push([plain.code, '', 10, 5.5, '', '', '', '']);
+    if (plain) samples.push([plain.code, '', 10, 5.5, '', '', '', '', '', '']);
     if (withVariants) {
-      samples.push([withVariants.code, withVariants.variants[0].code, 20, '', '', '', '', '']);
+      samples.push([withVariants.code, withVariants.variants[0].code, 20, '', '', '', '', '', '', '']);
     }
     if (categories.length) {
-      samples.push(['', '', 30, 12, 'Sample new product (rename me)', categories[0].code, 'PCS', '']);
+      samples.push(['', '', 30, 12, 'Sample new product (rename me)', categories[0].code, 'PCS', '', '', '']);
     }
     if (samples.length === 0) {
-      samples.push(['PRD-0001', '', 10, 5.5, '', '', '', '']);
+      samples.push(['PRD-0001', '', 10, 5.5, '', '', '', '', '', '']);
+    }
+    if (samples.length > 0) {
+      samples[0][8] = orderCols[0];
+      samples[0][9] = orderCols[1];
     }
 
     const rows: any[][] = [
@@ -69,14 +84,15 @@ export class PurchaseOrdersExcelService {
       [
         'Existing product: product_code + quantity (variant_code only if it has variants; empty unit_price = cost price). ' +
           'New product: leave product_code empty and fill new_product_name + category_code (unit defaults to PCS, sku optional). ' +
-          'See the "Products" and "Categories" sheets for valid codes.',
+          'supplier_code + warehouse_code (optional, first row is enough): fill the purchase order\'s supplier and warehouse automatically. ' +
+          'See the "Products", "Categories", "Suppliers" and "Warehouses" sheets for valid codes.',
       ],
       PurchaseOrdersExcelService.HEADERS,
       ...samples,
     ];
 
     const sheet = XLSX.utils.aoa_to_sheet(rows);
-    sheet['!cols'] = [{ wch: 22 }, { wch: 22 }, { wch: 12 }, { wch: 12 }, { wch: 28 }, { wch: 18 }, { wch: 10 }, { wch: 18 }];
+    sheet['!cols'] = [{ wch: 22 }, { wch: 22 }, { wch: 12 }, { wch: 12 }, { wch: 28 }, { wch: 18 }, { wch: 10 }, { wch: 18 }, { wch: 18 }, { wch: 18 }];
     sheet['A1'].s = { font: { bold: true, sz: 16, color: { rgb: '1B365D' } } };
     PurchaseOrdersExcelService.HEADERS.forEach((_, c) => {
       const cell = sheet[XLSX.utils.encode_cell({ r: 4, c })];
@@ -112,6 +128,18 @@ export class PurchaseOrdersExcelService {
       ]);
       cs['!cols'] = [{ wch: 18 }, { wch: 30 }];
       XLSX.utils.book_append_sheet(workbook, cs, 'Categories');
+    }
+    for (const [title, list] of [
+      ['Suppliers', suppliers],
+      ['Warehouses', warehouses],
+    ] as const) {
+      if (!list.length) continue;
+      const s = XLSX.utils.aoa_to_sheet([
+        [title === 'Suppliers' ? 'supplier_code' : 'warehouse_code', 'name'],
+        ...list.map((x) => [x.code, x.name]),
+      ]);
+      s['!cols'] = [{ wch: 28 }, { wch: 34 }];
+      XLSX.utils.book_append_sheet(workbook, s, title);
     }
     return XLSX.write(workbook, {
       type: 'buffer',
@@ -223,6 +251,8 @@ export class PurchaseOrdersExcelService {
     const iCategory = at('category_code');
     const iUnit = at('unit');
     const iSku = at('sku');
+    const iSupplier = at('supplier_code');
+    const iWarehouse = at('warehouse_code');
 
     const rows: PurchaseOrderImportRow[] = [];
     for (let r = headerIndex + 1; r < raw.length; r++) {
@@ -240,6 +270,8 @@ export class PurchaseOrdersExcelService {
         categoryCode: text(iCategory).toUpperCase() || null,
         unit: text(iUnit) || null,
         sku: text(iSku) || null,
+        supplierCode: text(iSupplier).toUpperCase() || null,
+        warehouseCode: text(iWarehouse).toUpperCase() || null,
       });
 
       if (rows.length > PO_IMPORT_MAX_ROWS) {
