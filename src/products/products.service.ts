@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   DataSource,
   EntityManager,
+  ILike,
   Not,
   Repository,
   SelectQueryBuilder,
@@ -29,6 +30,10 @@ import {
 import { deleteMultipleCloudinaryImages } from '../common/cloudinary/cloudinary.utils';
 
 import { BarcodesService } from '../barcodes/barcodes.service';
+
+/** Case-insensitive exact match on a name (escapes the LIKE wildcards). */
+const sameText = (value: string) =>
+  ILike(String(value).trim().replace(/[\\%_]/g, '\\$&'));
 
 @Injectable()
 export class ProductsService {
@@ -909,9 +914,14 @@ export class ProductsService {
     }
 
     // Find Category
-    const category = await manager.findOne(Category, {
-      where: { code: categoryCode, isActive: true },
-    });
+    // The Excel / form may give the code or, more forgivingly, the exact name.
+    const category =
+      (await manager.findOne(Category, {
+        where: { code: categoryCode, isActive: true },
+      })) ??
+      (await manager.findOne(Category, {
+        where: { name: sameText(categoryCode), isActive: true },
+      }));
     if (!category) {
       throw new BadRequestException(
         `Category "${categoryCode}" not found or inactive`,
@@ -921,9 +931,13 @@ export class ProductsService {
     // Find Brand if provided
     let brand: Brand | null = null;
     if (brandCode) {
-      brand = await manager.findOne(Brand, {
-        where: { code: brandCode, isActive: true },
-      });
+      brand =
+        (await manager.findOne(Brand, {
+          where: { code: brandCode, isActive: true },
+        })) ??
+        (await manager.findOne(Brand, {
+          where: { name: sameText(brandCode), isActive: true },
+        }));
       if (!brand) {
         throw new BadRequestException(
           `Brand "${brandCode}" not found or inactive`,
@@ -934,9 +948,13 @@ export class ProductsService {
     // Find Supplier if provided
     let supplier: Supplier | null = null;
     if (supplierCode) {
-      supplier = await manager.findOne(Supplier, {
-        where: { code: supplierCode, isActive: true },
-      });
+      supplier =
+        (await manager.findOne(Supplier, {
+          where: { code: supplierCode, isActive: true },
+        })) ??
+        (await manager.findOne(Supplier, {
+          where: { name: sameText(supplierCode), isActive: true },
+        }));
       if (!supplier) {
         throw new BadRequestException(
           `Supplier "${supplierCode}" not found or inactive`,
@@ -1074,9 +1092,13 @@ export class ProductsService {
         );
       }
 
-      const warehouse = await manager.findOne(Warehouse, {
-        where: { code: warehouseCode, isActive: true },
-      });
+      const warehouse =
+        (await manager.findOne(Warehouse, {
+          where: { code: warehouseCode, isActive: true },
+        })) ??
+        (await manager.findOne(Warehouse, {
+          where: { name: sameText(warehouseCode), isActive: true },
+        }));
       if (!warehouse) {
         throw new BadRequestException(
           `Warehouse "${warehouseCode}" not found or inactive`,
