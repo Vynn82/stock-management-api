@@ -22,6 +22,7 @@ import { UpdateUserRoleDto } from './dto/update-user-roles.dto';
 import { RequirePermission } from '../auth/decorators/permission.decorator';
 import * as authenticatedUserInterface from '../auth/interfaces/authenticated-request.interface';
 import { PaginationDto } from '../common/pagination';
+import { UserStatus } from './entities/user.entity';
 
 @Controller('users')
 export class UsersController {
@@ -63,6 +64,40 @@ export class UsersController {
     return this.usersService.updateRole(
       id,
       dto.roleId,
+      req.user.sub,
+      req.user.roles,
+    );
+  }
+
+  /**
+   * "Removes" a team member: the account is switched to INACTIVE, every session
+   * is revoked and the person can no longer sign in. The row stays so the
+   * stock history, requests and audit log that point to them remain valid.
+   */
+  @Patch(':id/deactivate')
+  @RequirePermission('USER_ROLE_UPDATE')
+  deactivate(
+    @Param('id') id: string,
+    @Req() req: authenticatedUserInterface.AuthenticatedRequest,
+  ) {
+    return this.usersService.setStatus(
+      id,
+      UserStatus.INACTIVE,
+      req.user.sub,
+      req.user.roles,
+    );
+  }
+
+  /** Lets a deactivated member sign in again. */
+  @Patch(':id/activate')
+  @RequirePermission('USER_ROLE_UPDATE')
+  activate(
+    @Param('id') id: string,
+    @Req() req: authenticatedUserInterface.AuthenticatedRequest,
+  ) {
+    return this.usersService.setStatus(
+      id,
+      UserStatus.ACTIVE,
       req.user.sub,
       req.user.roles,
     );

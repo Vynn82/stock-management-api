@@ -7,10 +7,11 @@ import {
 } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, IsNull, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 
-import { User } from './entities/user.entity';
+import { User, UserStatus } from './entities/user.entity';
+import { Session } from '../sessions/entities/session.entity';
 import { UserProfile } from './entities/user-profile.entity';
 import { UserRole } from './entities/user-role.entity';
 
@@ -311,6 +312,75 @@ export class UsersService {
 
   return this.getRoles(userId);
 }
+
+  /**
+   * Activates or deactivates a team member. Same hierarchy as changing a role:
+   * SUPER_ADMIN can manage everyone, others only the roles in ROLE_ASSIGNMENT_MAP.
+   * Deactivating also signs the person out everywhere.
+   */
+  async setStatus(
+    userId: string,
+    status: UserStatus.ACTIVE | UserStatus.INACTIVE,
+    requesterId: string,
+    requesterRoles: string[],
+  ) {
+    if (userId === requesterId) {
+      throw new ForbiddenException('You cannot change your own account status');
+    }
+
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const currentRoles = await this.getRoles(userId);
+    const currentNames = currentRoles.map((ur) => ur.role.name);
+
+    if (!requesterRoles.includes('SUPER_ADMIN')) {
+      const allowedTargets = requesterRoles.flatMap(
+        (r) => ROLE_ASSIGNMENT_MAP[r] ?? [],
+      );
+      if (!currentNames.every((name) => allowedTargets.includes(name))) {
+        throw new ForbiddenException(
+          "You are not allowed to manage this user's account",
+        );
+      }
+    }
+
+    if (user.status === status) {
+      return { id: user.id, status: user.status };
+    }
+
+    // Never lock everyone out: keep at least one active Super Admin.
+    if (status === UserStatus.INACTIVE && currentNames.includes('SUPER_ADMIN')) {
+      const otherActive = await this.userRepository
+        .createQueryBuilder('u')
+        .innerJoin('u.userRoles', 'ur')
+        .innerJoin('ur.role', 'r')
+        .where('r.name = :name', { name: 'SUPER_ADMIN' })
+        .andWhere('u.status = :active', { active: UserStatus.ACTIVE })
+        .andWhere('u.id != :id', { id: userId })
+        .getCount();
+      if (otherActive === 0) {
+        throw new BadRequestException(
+          'At least one active Super Admin is required',
+        );
+      }
+    }
+
+    await this.dataSource.transaction(async (manager) => {
+      await manager.update(User, userId, { status });
+      if (status === UserStatus.INACTIVE) {
+        await manager.update(
+          Session,
+          { userId, revokedAt: IsNull() },
+          { revokedAt: new Date() },
+        );
+      }
+    });
+
+    return { id: userId, status };
+  }
 
   /** A signed-in person edits their own name, email and phone. */
   async updateMe(userId: string, dto: UpdateMyProfileDto) {

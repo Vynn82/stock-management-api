@@ -11,7 +11,7 @@ import { Reflector } from '@nestjs/core';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { User } from '../../users/entities/user.entity';
+import { User, UserStatus } from '../../users/entities/user.entity';
 
 import { ALLOW_PASSWORD_CHANGE } from '../decorators/allow-password-change.decorator';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
@@ -76,6 +76,11 @@ export class MustChangePasswordGuard implements CanActivate {
 
     if (!user) {
       throw new UnauthorizedException('User not found');
+    }
+
+    // A deactivated account loses access straight away, not when its token expires.
+    if (user.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedException('User account is not active');
     }
 
     // ==========================================
