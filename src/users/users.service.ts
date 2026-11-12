@@ -371,6 +371,12 @@ export class UsersService {
     await this.dataSource.transaction(async (manager) => {
       await manager.update(User, userId, { status });
       if (status === UserStatus.INACTIVE) {
+        // Free the email so a new account can use it (email is unique).
+        await manager.update(
+          UserProfile,
+          { userId },
+          { email: `removed+${user.staffId.toLowerCase()}@deleted.local` },
+        );
         await manager.update(
           Session,
           { userId, revokedAt: IsNull() },
